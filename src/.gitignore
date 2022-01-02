@@ -53,7 +53,7 @@
 !/sasa
 !/xdrfile
 !/s2cm
-
+!/SPHDRUG
 # And just ignore these files
 *.xxd
 /*.on
