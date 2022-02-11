@@ -84,7 +84,7 @@ class Probe
     void calculate_r(double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms);
     void calculate_Soff_r(double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms);
 
-    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);
+    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z);
     void print_probe_xyz(int id, int step);
 
 };

@@ -499,6 +499,10 @@ void Sphdrug::calculate() {
     masses[j]=1;
     total_mass+=masses[j];
   }
+  /*
+  This is just for testing probe update
+  */
+  int updatestride[13]={1,2,5,10,20,50,100,200,500,1000,2000,5000,10000};
   #pragma omp parallel for
   for (unsigned i=0; i<nprobes; i++)
   {
@@ -511,11 +515,15 @@ void Sphdrug::calculate() {
     probes[i].place_probe(x,y,z);
     probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
     probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
+      int j=n_atoms+i;
+      double ref_x=getPosition(j)[0];
+      double ref_y=getPosition(j)[1];
+      double ref_z=getPosition(j)[2];
     probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
    }
    //Update probe coordinates
       //probes[i].center_probe(atoms_x,atoms_y,atoms_z,n_atoms);
-   if (step!=0)
+   if (step%updatestride[i]==0)
    {
     probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
     probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
@@ -524,8 +532,12 @@ void Sphdrug::calculate() {
 
    if (step%probestride==0)
    {
+         int j=n_atoms+i;
+         double ref_x=getPosition(j)[0];
+         double ref_y=getPosition(j)[1];
+         double ref_z=getPosition(j)[2];
       probes[i].print_probe_xyz(i, step);
-      probes[i].print_probe_movement(i,step,atoms,n_atoms);
+      probes[i].print_probe_movement(i,step,atoms,n_atoms,ref_x,ref_y,ref_z);
    }
   }
   
