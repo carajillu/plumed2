@@ -33,6 +33,7 @@
 #define max_atoms 10000
 
 //CV modules
+#include "probe.h"
 
 using namespace std;
 using  namespace std::chrono;
@@ -56,6 +57,9 @@ class Sphdrug : public Colvar {
   bool noupdate;
   // Variables necessary to check results
   bool target;
+  vector<PLMD::AtomNumber> atoms_target; // indices of the atoms defining the target pocket
+  unsigned n_target; //number of atoms used in TARGET
+  vector<unsigned> target_j; //Indices of atoms_target in getPositions()
   // Parameters
   double rprobe; // radius of each spherical probe
   double mind_slope; //slope of the mind linear implementation
@@ -63,22 +67,31 @@ class Sphdrug : public Colvar {
   double CCmin; // mind below which an atom is considered to be clashing with the probe 
   double CCmax; // distance above which an atom is considered to be too far away from the probe*
   double deltaCC; // interval over which contact terms are turned on and off
-  double Pmax; // number of atoms surrounding the probe for it to be considered completely packed
   double Dmin; // packing factor below which depth term equals 0
   double deltaD; // interval over which depth term turns from 0 to 1
+
   // Set up of CV
   vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
   unsigned n_atoms; // number of atoms supplied to the CV
   double atoms_x[max_atoms];
   double atoms_y[max_atoms];
   double atoms_z[max_atoms];
+  double masses[max_atoms];
+  double total_mass;
 
-  int nprobes; // number of spherical probes to use
+
+  vector<PLMD::AtomNumber> atoms_init; // Indices of the atoms in which the probes will be initially centered
+  unsigned n_init; // number of atoms used in ATOMS_INIT
+  vector<unsigned> init_j; //Indices of atoms_init in getPositions()
+
+  vector<Probe> probes; //This will contain all the spherical probes
+  unsigned nprobes; // number of spherical probes to use
 
   // Output control variables
   unsigned probestride; // stride to print information for post-processing the probe coordinates 
 
   // Calculation of CV and its derivatives
+
   double sphdrug;
   vector<double> d_Sphdrug_dx;
   vector<double> d_Sphdrug_dy;
@@ -119,15 +132,18 @@ void Sphdrug::registerKeywords(Keywords& keys) {
   keys.addFlag("NODXFIX",false,"skip derivative correction");
   keys.addFlag("PERFORMANCE",false,"measure execution time");
   keys.add("atoms","ATOMS","Atoms to include in druggability calculations (start at 1)");
+  keys.add("atoms","ATOMS_INIT","Atoms in which the probes will be initially centered.");
+  keys.add("atoms","TARGET","Atoms defining the target pocket (not necessarily among ATOMS)");
   keys.add("optional","NPROBES","Number of probes to use");
   keys.add("optional","RPROBE","Radius of every probe in nm");
-  keys.add("optional","PROBESTRIDE","Radius of every probe in nm");
-  keys.add("optional","CCMIN","Radius of every probe in nm");
-  keys.add("optional","CCMAX","Radius of every probe in nm");
-  keys.add("optional","DELTACC","Radius of every probe in nm");
-  keys.add("optional","MINDSLOPE","Radius of every probe in nm");
-  keys.add("optional","MINDINTERCEPT","Radius of every probe in nm");
-  //keys.add("deltaCC","DELTACC","Radius of every probe in nm");
+  keys.add("optional","PROBESTRIDE","Print probe coordinates info every PROBESTRIDE steps");
+  keys.add("optional","CCMIN","");
+  keys.add("optional","CCMAX","");
+  keys.add("optional","DELTACC","");
+  keys.add("optional","MINDSLOPE","");
+  keys.add("optional","MINDINTERCEPT","");
+  keys.add("optional","DMIN","");
+  keys.add("optional","DELTAD","");
 }
 
 Sphdrug::Sphdrug(const ActionOptions&ao):
@@ -136,7 +152,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
   noupdate(false),
   nodxfix(false),
   performance(false),
-  target(false)
+  target(true)
 {
   /*
   Initialising openMP threads. 
@@ -145,6 +161,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
   #pragma omp parallel
      nthreads=omp_get_num_threads();
   ndev=omp_get_num_devices();
+  cout << "------------ Available Computing Resources -------------" << endl;
   cout << "Sphdrug initialised with " << nthreads << " OMP threads " << endl;
   cout << "and " << ndev << " OMP compatible accelerators (not currently used)" << endl;
   
@@ -160,34 +177,88 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
   parseFlag("PERFORMANCE",performance);
 
   parseAtomList("ATOMS",atoms);
-  requestAtoms(atoms);
+  parseAtomList("ATOMS_INIT",atoms_init);
+  parseAtomList("TARGET",atoms_target);
+
   n_atoms=atoms.size();
 
-  cout << "--------- Initialising Sphdrug Collective Variable -----------" << endl;
-  parse("NPROBES",nprobes);
-  if (!nprobes) nprobes=1;
-  cout << "Using " << nprobes << " spherical probe(s) ";
+  n_init=atoms_init.size();
+  for (unsigned j=0; j<n_init;j++)
+  {
+    atoms.push_back(atoms_init[j]);
+    init_j.push_back(n_atoms+j);
+  }
+  
+  if (atoms_target.size()==0)
+  {
+   target=false;
+  }
+  else
+  {
+   n_target=atoms_target.size();
+   for (unsigned j=0; j<n_target;j++)
+   {
+     atoms.push_back(atoms_target[j]);
+     target_j.push_back(n_atoms+n_init+j);
+   }
+  }
 
+  if (atoms.size()>max_atoms)
+  {
+    cout << "ERROR!" << endl;
+    cout << "The sum of the lengths of ATOMS, ATOMS_INIT and TARGET can't exceed "<< max_atoms << "." << endl;
+    cout << "You can increase the max_atoms variable in the sphdrug.cpp file ans recompile, but make sure you have enough memory." << endl;
+    cout << "ERROR!" << endl;
+    exit(0);
+  }
+  else
+  {
+    requestAtoms(atoms);
+  }
+  cout << "--------- Initialising Sphdrug Collective Variable -----------" << endl;
+
+  parse("NPROBES",nprobes);
+  if (!nprobes) 
+  {
+   nprobes=1;
+  }
+
+  if (nprobes!=atoms_init.size() and atoms_init.size()>0)
+  {
+   cout << "Overriding NPROBES with the length of ATOMS_INIT" << endl;
+   nprobes=atoms_init.size();
+  }
+
+  if (atoms_init.size()==0)
+  {
+   for (unsigned i=0; i<nprobes; i++)
+   {
+     random_device rd;     // only used once to initialise (seed) engine
+     mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
+     uniform_int_distribution<unsigned> uni(0,n_atoms); // guaranteed unbiased
+     auto random_integer = uni(rng);
+     init_j.push_back(random_integer);
+   }
+  }
+  
+  cout << "Using " << nprobes << " spherical probe(s) with the following parameters:"<< endl;
+
+  // Attributes of the probe object (kept private)
   parse("RPROBE",rprobe);
   if (!rprobe) rprobe=0.3;
-  cout << "of radius equal to " << rprobe << " nm." << endl;
+  cout << "Radius = " << rprobe << " nm" << endl;
 
-  parse("PROBESTRIDE",probestride);
-  if (!probestride) probestride=1;
-  cout << "Information to post-process probe coordinates will be printed every " << probestride << " steps" << endl << endl;
-
-  // PARAMETERS NEEDED TO CALCULATE THE CV
   parse("CCMIN",CCmin);
   if (!CCmin) CCmin=0.2;
-  cout << "CCmin = " << CCmin << endl;
+  cout << "CCmin = " << CCmin << " nm" << endl;
 
   parse("CCMAX",CCmax);
   if (!CCmax) CCmax=0.5;
-  cout << "CCmax = " << CCmax << endl;
+  cout << "CCmax = " << CCmax << " nm" << endl;
 
   parse("DELTACC",deltaCC);
   if (!deltaCC) deltaCC=0.05;
-  cout << "deltaCC = " << deltaCC << endl;
+  cout << "deltaCC = " << deltaCC << " nm" << endl;
 
   parse("MINDSLOPE",mind_slope);
   if (!mind_slope) mind_slope=1.227666; //obtained from generating 10000 random points in VHL's crystal structure
@@ -195,12 +266,30 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   parse("MINDINTERCEPT",mind_intercept);
   if (!mind_intercept) mind_intercept=-0.089870; //obtained from generating 10000 random points in VHL's crystal structure
-  cout << "MINDINTERCEPT = " << mind_intercept << endl;
+  cout << "MINDINTERCEPT = " << mind_intercept << " nm" << endl;
 
+  parse("DMIN",Dmin);
+  if (!Dmin) Dmin=10; //obtained from generating 10000 random points in VHL's crystal structure
+  cout << "DMIN = " << Dmin << endl;
+
+  parse("DELTAD",deltaD);
+  if (!deltaD) deltaD=15; //obtained from generating 10000 random points in VHL's crystal structure
+  cout << "DELTAD = " << deltaD << endl;
+
+  for (unsigned i=0;i<nprobes;i++)
+  {
+    probes.push_back(Probe(rprobe, mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD));
+    cout << "Probe " << i << " initialised, centered on atom: " << init_j[i] << endl;
+  }
+
+  //parameters used to control output
+  parse("PROBESTRIDE",probestride);
+  if (!probestride) probestride=1;
+  cout << "Information to post-process probe coordinates will be printed every " << probestride << " steps" << endl << endl;
 
   checkRead();
 
-  cout << "Initialisng Sphdrug and its derivatives" << endl;
+  cout << "---------Initialisng Sphdrug and its derivatives---------" << endl;
   sphdrug=0;
   double d_Sphdrug_dx[max_atoms];
   double d_Sphdrug_dy[max_atoms];
@@ -208,7 +297,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   if (!nodxfix)
   {
-  cout << "Initialisng correction of Sphdrug derivatives" << endl;
+  cout << "---------Initialisng correction of Sphdrug derivatives---------" << endl;
 
   //L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
   nrows=6;
@@ -395,9 +484,56 @@ void Sphdrug::calculate() {
   auto start_psi=high_resolution_clock::now();
   if (pbc) makeWhole();
   reset();
+
+  
+  unsigned step=getStep();
+  //#pragma omp parallel for //?
+  for (unsigned j=0; j<n_atoms; j++)
+  {
+    atoms_x[j]=getPosition(j)[0];
+    atoms_y[j]=getPosition(j)[1];
+    atoms_z[j]=getPosition(j)[2];
+    if (step>0)
+       continue;
+    //masses[j]=getMass(j);
+    masses[j]=1;
+    total_mass+=masses[j];
+  }
+  #pragma omp parallel for
+  for (unsigned i=0; i<nprobes; i++)
+  {
+   //set up stuff at step 0
+   if (step==0)
+   {
+    double x=getPosition(init_j[i])[0];
+    double y=getPosition(init_j[i])[1];
+    double z=getPosition(init_j[i])[2];
+    probes[i].place_probe(x,y,z);
+    probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
+    probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
+    probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
+   }
+   //Update probe coordinates
+      //probes[i].center_probe(atoms_x,atoms_y,atoms_z,n_atoms);
+   if (step!=0)
+   {
+    probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
+    probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
+    probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
+   }
+
+   if (step%probestride==0)
+   {
+      probes[i].print_probe_xyz(i, step);
+      probes[i].print_probe_movement(i,step,atoms,n_atoms);
+   }
+  }
+  
   auto end_psi=high_resolution_clock::now();
   int exec_time=duration_cast<microseconds>(end_psi-start_psi).count();
-  cout << "Executed in " << exec_time << " microseconds." << endl;
+  //cout << "Executed in " << exec_time << " microseconds." << endl;
+
+  //if (step>=4) exit(0);
 
 }//close calculate
 }//close colvar
