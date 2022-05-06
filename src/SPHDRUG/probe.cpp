@@ -14,6 +14,7 @@
 using namespace std;
 using namespace COREFUNCTIONS;
 
+
 Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms)
 {
   rprobe=Rprobe; // radius of each spherical probe
@@ -27,22 +28,26 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   Pmax=Dmin+deltaD; // number of atoms surrounding the probe for it to be considered completely packed
 
   //allocate vectors
-  rx.reserve(n_atoms);
-  ry.reserve(n_atoms);
-  rz.reserve(n_atoms);
+  rx=vector<double>(n_atoms,0);
+  ry=vector<double>(n_atoms,0);
+  rz=vector<double>(n_atoms,0);
 
-  r.reserve(n_atoms);
-  dr_dx.reserve(n_atoms);
-  dr_dy.reserve(n_atoms);
-  dr_dz.reserve(n_atoms);
+  r=vector<double>(n_atoms,0);
+  dr_dx=vector<double>(n_atoms,0);
+  dr_dy=vector<double>(n_atoms,0);
+  dr_dz=vector<double>(n_atoms,0);
 
-  Soff_r.reserve(n_atoms);
-  dSoff_r_dx.reserve(n_atoms);
-  dSoff_r_dy.reserve(n_atoms);
-  dSoff_r_dz.reserve(n_atoms);
+  Soff_r=vector<double>(n_atoms,0);
+  dSoff_r_dx=vector<double>(n_atoms,0);
+  dSoff_r_dy=vector<double>(n_atoms,0);
+  dSoff_r_dz=vector<double>(n_atoms,0);
 
-  xyz.reserve(3);
-  centroid.reserve(3);
+  xyz=vector<double>(3,0);
+  centroid=vector<double>(3,0);
+
+  atomcoords_0=Eigen::MatrixXd::Zero(n_atoms,3);
+  atomcoords=Eigen::MatrixXd::Zero(n_atoms,3);
+  weights=Eigen::VectorXd::Zero(n_atoms);
 }
 
 // Place probe on top a specified or randomly chosen atom, only at step 0
@@ -97,7 +102,7 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
 {
-
+ 
 }
 
 void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)

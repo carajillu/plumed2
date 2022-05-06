@@ -71,12 +71,11 @@ class Sphdrug : public Colvar {
   // Set up of CV
   vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
   unsigned n_atoms; // number of atoms supplied to the CV
+  vector<double> masses;
+  double total_mass;
   vector<double> atoms_x;
   vector<double> atoms_y;
   vector<double> atoms_z;
-  vector<double> masses;
-  double total_mass;
-
 
   vector<PLMD::AtomNumber> atoms_init; // Indices of the atoms in which the probes will be initially centered
   unsigned n_init; // number of atoms used in ATOMS_INIT
@@ -201,6 +200,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
    }
   }
 
+  cout << "Requesting " << n_atoms << " atoms" << endl;
   requestAtoms(atoms);
   cout << "--------- Initialising Sphdrug Collective Variable -----------" << endl;
 
@@ -265,6 +265,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   for (unsigned i=0;i<nprobes;i++)
   {
+    
     probes.push_back(Probe(rprobe, mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms));
     cout << "Probe " << i << " initialised, centered on atom: " << init_j[i] << endl;
   }
@@ -276,12 +277,19 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   checkRead();
 
+  // Allocate space for atom coordinates and masses
+  
+  atoms_x=vector<double>(n_atoms,0);
+  atoms_y=vector<double>(n_atoms,0);
+  atoms_z=vector<double>(n_atoms,0);
+  masses=vector<double>(n_atoms,0);
+  
+
   cout << "---------Initialisng Sphdrug and its derivatives---------" << endl;
   sphdrug=0;
-  d_Sphdrug_dx.reserve(n_atoms);
-  d_Sphdrug_dy.reserve(n_atoms);
-  d_Sphdrug_dz.reserve(n_atoms);
-
+  d_Sphdrug_dx=vector<double>(n_atoms,0);
+  d_Sphdrug_dy=vector<double>(n_atoms,0);
+  d_Sphdrug_dz=vector<double>(n_atoms,0);
   if (!nodxfix)
   {
   cout << "---------Initialisng correction of Sphdrug derivatives---------" << endl;
@@ -293,8 +301,8 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
   Aplus=arma::mat(nrows,ncols);
   L=arma::vec(nrows);
   P=arma::vec(ncols);
-  sum_P.reserve(3);
-  sum_rcrossP.reserve(3);
+  sum_P=vector<double>(3,0);
+  sum_rcrossP=vector<double>(3,0);
   }
   else
   {
@@ -468,9 +476,11 @@ void Sphdrug::correct_derivatives()
 
 // calculator
 void Sphdrug::calculate() {
+  
   auto start_psi=high_resolution_clock::now();
   if (pbc) makeWhole();
   reset();
+
 
   
   unsigned step=getStep();
@@ -510,7 +520,6 @@ void Sphdrug::calculate() {
    //probes[i].kabsch(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
    probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
    probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
-   
 
    if (step%probestride==0)
    {
@@ -521,7 +530,7 @@ void Sphdrug::calculate() {
   
   auto end_psi=high_resolution_clock::now();
   int exec_time=duration_cast<microseconds>(end_psi-start_psi).count();
-  //cout << "Executed in " << exec_time << " microseconds." << endl;
+  cout << "Executed in " << exec_time << " microseconds." << endl;
 
   //if (step>=10) exit(0);
 
