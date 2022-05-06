@@ -30,8 +30,6 @@
 #include <armadillo>
 #include <omp.h>
 
-#define max_atoms 10000
-
 //CV modules
 #include "probe.h"
 
@@ -73,10 +71,10 @@ class Sphdrug : public Colvar {
   // Set up of CV
   vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
   unsigned n_atoms; // number of atoms supplied to the CV
-  double atoms_x[max_atoms];
-  double atoms_y[max_atoms];
-  double atoms_z[max_atoms];
-  double masses[max_atoms];
+  vector<double> atoms_x;
+  vector<double> atoms_y;
+  vector<double> atoms_z;
+  vector<double> masses;
   double total_mass;
 
 
@@ -203,18 +201,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
    }
   }
 
-  if (atoms.size()>max_atoms)
-  {
-    cout << "ERROR!" << endl;
-    cout << "The sum of the lengths of ATOMS, ATOMS_INIT and TARGET can't exceed "<< max_atoms << "." << endl;
-    cout << "You can increase the max_atoms variable in the sphdrug.cpp file ans recompile, but make sure you have enough memory." << endl;
-    cout << "ERROR!" << endl;
-    exit(0);
-  }
-  else
-  {
-    requestAtoms(atoms);
-  }
+  requestAtoms(atoms);
   cout << "--------- Initialising Sphdrug Collective Variable -----------" << endl;
 
   parse("NPROBES",nprobes);
@@ -278,7 +265,7 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   for (unsigned i=0;i<nprobes;i++)
   {
-    probes.push_back(Probe(rprobe, mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD));
+    probes.push_back(Probe(rprobe, mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms));
     cout << "Probe " << i << " initialised, centered on atom: " << init_j[i] << endl;
   }
 
@@ -291,9 +278,9 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
 
   cout << "---------Initialisng Sphdrug and its derivatives---------" << endl;
   sphdrug=0;
-  double d_Sphdrug_dx[max_atoms];
-  double d_Sphdrug_dy[max_atoms];
-  double d_Sphdrug_dz[max_atoms];
+  d_Sphdrug_dx.reserve(n_atoms);
+  d_Sphdrug_dy.reserve(n_atoms);
+  d_Sphdrug_dz.reserve(n_atoms);
 
   if (!nodxfix)
   {
@@ -306,8 +293,8 @@ Sphdrug::Sphdrug(const ActionOptions&ao):
   Aplus=arma::mat(nrows,ncols);
   L=arma::vec(nrows);
   P=arma::vec(ncols);
-  sum_P=vector<double>(3,0);
-  sum_rcrossP=vector<double>(3,0);
+  sum_P.reserve(3);
+  sum_rcrossP.reserve(3);
   }
   else
   {
@@ -493,19 +480,21 @@ void Sphdrug::calculate() {
     atoms_x[j]=getPosition(j)[0];
     atoms_y[j]=getPosition(j)[1];
     atoms_z[j]=getPosition(j)[2];
-    if (step>0)
+    if (step>0) //masses are the same throughout the simulation
        continue;
     //masses[j]=getMass(j);
     masses[j]=1;
     total_mass+=masses[j];
   }
-  /*
-  This is just for testing probe update
-  */
-  int updatestride[13]={1,2,5,10,20,50,100,200,500,1000,2000,5000,10000};
+  
   #pragma omp parallel for
   for (unsigned i=0; i<nprobes; i++)
   {
+   //Get coordinates of the reference atom (change to target at some point?)
+   int j=n_atoms+i;
+   double ref_x=getPosition(j)[0];
+   double ref_y=getPosition(j)[1];
+   double ref_z=getPosition(j)[2];
    //set up stuff at step 0
    if (step==0)
    {
@@ -515,29 +504,18 @@ void Sphdrug::calculate() {
     probes[i].place_probe(x,y,z);
     probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
     probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
-      int j=n_atoms+i;
-      double ref_x=getPosition(j)[0];
-      double ref_y=getPosition(j)[1];
-      double ref_z=getPosition(j)[2];
-    probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
    }
    //Update probe coordinates
-      //probes[i].center_probe(atoms_x,atoms_y,atoms_z,n_atoms);
-   if (step%updatestride[i]==0)
-   {
-    probes[i].move_probe(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
-    probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
-    probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
-   }
+   probes[i].calc_centroid(atoms_x,atoms_y,atoms_z,n_atoms);
+   //probes[i].kabsch(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
+   probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
+   probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
+   
 
    if (step%probestride==0)
    {
-         int j=n_atoms+i;
-         double ref_x=getPosition(j)[0];
-         double ref_y=getPosition(j)[1];
-         double ref_z=getPosition(j)[2];
-      probes[i].print_probe_xyz(i, step);
-      probes[i].print_probe_movement(i,step,atoms,n_atoms,ref_x,ref_y,ref_z);
+     probes[i].print_probe_xyz(i, step);
+     probes[i].print_probe_movement(i,step,atoms,n_atoms,ref_x,ref_y,ref_z);
    }
   }
   
@@ -545,7 +523,7 @@ void Sphdrug::calculate() {
   int exec_time=duration_cast<microseconds>(end_psi-start_psi).count();
   //cout << "Executed in " << exec_time << " microseconds." << endl;
 
-  //if (step>=4) exit(0);
+  //if (step>=10) exit(0);
 
 }//close calculate
 }//close colvar

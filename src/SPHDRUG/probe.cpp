@@ -5,6 +5,7 @@
 #include <string>
 #include <random>
 #include <iterator>
+#include <eigen3/Eigen/Geometry>
 
 #include "core/ActionAtomistic.h"
 #include "probe.h"
@@ -13,7 +14,7 @@
 using namespace std;
 using namespace COREFUNCTIONS;
 
-Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD)
+Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms)
 {
   rprobe=Rprobe; // radius of each spherical probe
   mind_slope=Mind_slope; //slope of the mind linear implementation
@@ -24,6 +25,24 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   Dmin=DMin; // packing factor below which depth term equals 0
   deltaD=DeltaD; // interval over which depth term turns from 0 to 1
   Pmax=Dmin+deltaD; // number of atoms surrounding the probe for it to be considered completely packed
+
+  //allocate vectors
+  rx.reserve(n_atoms);
+  ry.reserve(n_atoms);
+  rz.reserve(n_atoms);
+
+  r.reserve(n_atoms);
+  dr_dx.reserve(n_atoms);
+  dr_dy.reserve(n_atoms);
+  dr_dz.reserve(n_atoms);
+
+  Soff_r.reserve(n_atoms);
+  dSoff_r_dx.reserve(n_atoms);
+  dSoff_r_dy.reserve(n_atoms);
+  dSoff_r_dz.reserve(n_atoms);
+
+  xyz.reserve(3);
+  centroid.reserve(3);
 }
 
 // Place probe on top a specified or randomly chosen atom, only at step 0
@@ -34,30 +53,8 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-//calculate a weighted centroid as a reference to move the probe
-void Probe::calc_centroid(double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms)
-{
- double x=0;
- double y=0;
- double z=0;
- double total_bsite=0;
-
- #pragma omp parallel for reduction(+:x,y,z,total_bsite)
- for (unsigned j=0; j<n_atoms; j++)
- {
-   x+=atoms_x[j]*Soff_r[j];
-   y+=atoms_y[j]*Soff_r[j];
-   z+=atoms_z[j]*Soff_r[j];
-   total_bsite+=Soff_r[j];
- }
- 
- centroid[0]=x/total_bsite;
- centroid[1]=y/total_bsite;
- centroid[2]=z/total_bsite;
-}
-
 //calculate distance between the center of the probe and the atoms, and all their derivatives
-void Probe::calculate_r(double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms)
+void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
 {
  #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
@@ -66,7 +63,7 @@ void Probe::calculate_r(double* atoms_x, double* atoms_y, double* atoms_z, unsig
    ry[j]=atoms_y[j]-xyz[1];
    rz[j]=atoms_z[j]-xyz[2];
 
-   r[j]=sqrt(pow(rx[j],2)+pow(rz[j],2)+pow(rz[j],2));
+   r[j]=sqrt(pow(rx[j],2)+pow(ry[j],2)+pow(rz[j],2));
 
    dr_dx[j]=rx[j]/r[j];
    dr_dy[j]=ry[j]/r[j];
@@ -75,7 +72,7 @@ void Probe::calculate_r(double* atoms_x, double* atoms_y, double* atoms_z, unsig
 }
 
 //Calculate Soff_r and all their derivatives
-void Probe::calculate_Soff_r(double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms)
+void Probe::calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
 {
  total_Soff=0;
  #pragma omp parallel for reduction(+:total_Soff)
@@ -92,46 +89,15 @@ void Probe::calculate_Soff_r(double* atoms_x, double* atoms_y, double* atoms_z, 
  }
 }
 
-void Probe::move_probe(unsigned step, double* atoms_x, double* atoms_y, double* atoms_z, unsigned n_atoms, double* masses, double total_mass)
+//calculate a weighted centroid as a reference to move the probe
+void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
 {
-//cout << "******************************* step " << step << " ****************************" << endl;
-double delta_x=0;
-double delta_y=0;
-double delta_z=0;
-double total_Soff=0;
-for (unsigned j=0; j<n_atoms; j++)
-{
-  if (step==0)
-  {
-    atoms_x0[j]=atoms_x[j];
-    atoms_y0[j]=atoms_y[j];
-    atoms_z0[j]=atoms_z[j];
-    xyz0[0]=xyz[0];
-    xyz0[1]=xyz[1];
-    xyz0[2]=xyz[2];
-  }
-
-  delta_x+=(atoms_x[j]-atoms_x0[j])*Soff_r[j];
-  delta_y+=(atoms_y[j]-atoms_y0[j])*Soff_r[j];
-  delta_z+=(atoms_z[j]-atoms_z0[j])*Soff_r[j];
-  total_Soff+=Soff_r[j];
+ 
 }
 
-delta_x/=total_Soff;
-delta_y/=total_Soff;
-delta_z/=total_Soff;
-
-xyz[0]+=delta_x;
-xyz[1]+=delta_y;
-xyz[2]+=delta_z;
-//cout << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
-
-for (unsigned j=0; j< n_atoms; j++)
+void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
 {
-atoms_x0[j]=atoms_x[j];
-atoms_y0[j]=atoms_y[j];
-atoms_z0[j]=atoms_z[j];
-}
+
 }
 
 void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)
@@ -178,11 +144,9 @@ void Probe::print_probe_xyz(int id, int step)
  {
   wfile.open(filename.c_str(),std::ios_base::app);
  }
- wfile << 3 << endl;
+ wfile << 1 << endl;
  wfile << "Probe  "<< to_string(id) << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;
- wfile << "O " << std::fixed << std::setprecision(5) << centroid0[0]*10 << " " << centroid0[1]*10 << " " << centroid0[2]*10 << endl;
- wfile << "N " << std::fixed << std::setprecision(5) << com0[0]*10 << " " << com0[1]*10 << " " << com0[2]*10 << endl;
  wfile.close();
 }
 
