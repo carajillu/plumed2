@@ -108,7 +108,7 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
  centroid[0]=0;
  centroid[1]=0;
  centroid[2]=0;
- /*
+
  for (unsigned j=0; j<n_atoms;j++)
  {
    centroid[0]+=atoms_x[j]*Soff_r[j];
@@ -118,19 +118,6 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
  centroid[0]/=total_Soff;
  centroid[1]/=total_Soff;
  centroid[2]/=total_Soff;
- */
- total_Soff=0;
-for (unsigned j=0; j<n_atoms;j++)
- {
-   centroid[0]+=atoms_x[j];
-   centroid[1]+=atoms_y[j];
-   centroid[2]+=atoms_z[j];
-   total_Soff+=1;
- }
- centroid[0]/=total_Soff;
- centroid[1]/=total_Soff;
- centroid[2]/=total_Soff;
- //*/
 }
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
@@ -153,8 +140,8 @@ void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y
  //Obtain rotmat with Kabsch Algorithm
  //we want to rotate atomcoords_0 into atomcoords, and NOT the other way round
 
- wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
- //wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate weighted covariance matrix
+ //wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
+ wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate weighted covariance matrix
  
  //SVD of wCov
  arma::svd(U,s,V,wCov);
@@ -180,22 +167,22 @@ void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y
 
 void Probe::move_probe()
 {
-  //cout << "probe0: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
-  //cout << "centroid0; " << centroid0[0] << " " << centroid0[1] << " " << centroid0[2] << endl;
+  cout << "probe0: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  cout << "centroid0; " << centroid0[0] << " " << centroid0[1] << " " << centroid0[2] << endl;
 
   arma_xyz.row(0).col(0)=xyz[0]-centroid0[0];
   arma_xyz.row(0).col(1)=xyz[1]-centroid0[1];
   arma_xyz.row(0).col(2)=xyz[2]-centroid0[2];
 
   arma_xyz=arma_xyz*R;
-  //R.print();
+  R.print();
   //arma_xyz.print();
   xyz[0]=arma::as_scalar(arma_xyz.row(0).col(0))+centroid[0];
   xyz[1]=arma::as_scalar(arma_xyz.row(0).col(1))+centroid[1];
   xyz[2]=arma::as_scalar(arma_xyz.row(0).col(2))+centroid[2];
 
-  //cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
-  //cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
+  cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
 }
 
 void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)

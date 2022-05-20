@@ -531,7 +531,7 @@ void Sphdrug::calculate() {
   
   auto end_psi=high_resolution_clock::now();
   int exec_time=duration_cast<microseconds>(end_psi-start_psi).count();
-  //cout << "Executed in " << exec_time << " microseconds." << endl;
+  cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
 
   //if (step>=10) exit(0);
 
