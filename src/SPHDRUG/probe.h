@@ -1,6 +1,7 @@
 #include <vector>
 #include "tools/PDB.h"
 #include <eigen3/Eigen/Geometry>
+#include <armadillo>
 
 using namespace std;
 
@@ -41,9 +42,17 @@ class Probe
   //coordinates
   vector<double> xyz;
   vector<double> centroid;
-  
 
   //for probe movement
+  arma::mat atomcoords_0;
+  arma::mat atomcoords;
+  arma::mat weights;
+  arma::mat wCov; // weighted covariance matrix
+  arma::vec eigenvalues;
+  arma::mat eigenvectors;
+  arma::mat eigenvectors_sorted;
+  arma::mat B;
+  arma::mat R; //rotation matrix
 
  public:
     Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);

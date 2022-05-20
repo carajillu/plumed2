@@ -5,7 +5,8 @@
 #include <string>
 #include <random>
 #include <iterator>
-#include <eigen3/Eigen/Geometry>
+#include <armadillo> 
+//you can disable bonds check at compile time with the flag -DARMA_NO_DEBUG (makes matrix multiplication 40%ish faster).
 
 #include "core/ActionAtomistic.h"
 #include "probe.h"
@@ -45,9 +46,15 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   xyz=vector<double>(3,0);
   centroid=vector<double>(3,0);
 
-  atomcoords_0=Eigen::MatrixXd::Zero(n_atoms,3);
-  atomcoords=Eigen::MatrixXd::Zero(n_atoms,3);
-  weights=Eigen::VectorXd::Zero(n_atoms);
+  atomcoords_0=arma::mat(n_atoms,3,arma::fill::zeros);
+  atomcoords=arma::mat(n_atoms,3,arma::fill::zeros); //This is directly transposed
+  weights=arma::mat(n_atoms,n_atoms,arma::fill::zeros);
+  wCov=arma::mat(3,3,arma::fill::zeros);
+  eigenvalues=arma::vec(3,arma::fill::zeros);
+  eigenvectors=arma::mat(3,3,arma::fill::zeros);
+  eigenvectors_sorted=arma::mat(3,3,arma::fill::zeros);
+  B=arma::mat(3,3,arma::fill::zeros);
+  R=arma::mat(3,3,arma::fill::zeros); //Rotation matrix. filled with zeros to make sure step 0 gives Identity Matrix
 }
 
 // Place probe on top a specified or randomly chosen atom, only at step 0
@@ -97,11 +104,81 @@ void Probe::calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vec
 //calculate a weighted centroid as a reference to move the probe
 void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
 {
- 
+ centroid[0]=0;
+ centroid[1]=0;
+ centroid[2]=0;
+ /*
+ for (unsigned j=0; j<n_atoms;j++)
+ {
+   centroid[0]+=atoms_x[j]*Soff_r[j];
+   centroid[1]+=atoms_y[j]*Soff_r[j];
+   centroid[2]+=atoms_z[j]*Soff_r[j];
+   total_Soff+=Soff_r[j];
+ }
+ centroid[0]/=total_Soff;
+ centroid[1]/=total_Soff;
+ centroid[2]/=total_Soff;
+ */
+for (unsigned j=0; j<n_atoms;j++)
+ {
+   centroid[0]+=atoms_x[j];
+   centroid[1]+=atoms_y[j];
+   centroid[2]+=atoms_z[j];
+   total_Soff+=1;
+ }
+ centroid[0]/=total_Soff;
+ centroid[1]/=total_Soff;
+ centroid[2]/=total_Soff;
 }
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
 {
+ for (unsigned j=0; j<n_atoms;j++)
+ {
+   if (step==0)
+   {
+   atomcoords_0.row(j).col(0)=atoms_x[j]-centroid[0];
+   atomcoords_0.row(j).col(1)=atoms_y[j]-centroid[1];
+   atomcoords_0.row(j).col(2)=atoms_z[j]-centroid[2];
+   }
+   atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
+   atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
+   atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
+
+   weights.row(j).col(j)=Soff_r[j]; //This can be memory expensive!
+ }
+
+ //Obtain rotmat with Kabsch Algorithm
+ //we want to rotate atomcoords_0 into atomcoords, and NOT the other way round
+
+ wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
+ //wCov=atomcoords*weights*atomcoords_0; //calculate weighted covariance matrix
+ cout << "wCov" << endl;
+ wCov.print();
+ cout << "wCov2" << endl;
+ wCov=wCov*arma::trans(wCov); //square the weighted covariance matrix (it is symmetrical so its transposed is the same)
+ wCov.print();
+
+ 
+ //SVD of wCov
+ arma::mat U;
+ arma::vec s;
+ arma::mat V;
+
+ arma::svd(U,s,V,wCov);
+ U.print();
+ s.print();
+ V.print();
+
+ // Calculate R (finally!)
+ cout << "R" << endl;
+ R=V*arma::trans(U);
+ R.print();
+ 
+  
+ //backup atomcoords
+ atomcoords_0=atomcoords;
+ 
  
 }
 

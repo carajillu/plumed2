@@ -517,7 +517,7 @@ void Sphdrug::calculate() {
    }
    //Update probe coordinates
    probes[i].calc_centroid(atoms_x,atoms_y,atoms_z,n_atoms);
-   //probes[i].kabsch(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
+   probes[i].kabsch(step,atoms_x,atoms_y,atoms_z,n_atoms,masses,total_mass);
    probes[i].calculate_r(atoms_x,atoms_y,atoms_z,n_atoms);
    probes[i].calculate_Soff_r(atoms_x,atoms_y,atoms_z,n_atoms);
 
@@ -532,7 +532,7 @@ void Sphdrug::calculate() {
   int exec_time=duration_cast<microseconds>(end_psi-start_psi).count();
   cout << "Executed in " << exec_time << " microseconds." << endl;
 
-  //if (step>=10) exit(0);
+  exit(0);
 
 }//close calculate
 }//close colvar
