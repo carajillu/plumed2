@@ -42,16 +42,17 @@ class Probe
   //coordinates
   vector<double> xyz;
   vector<double> centroid;
+  vector<double> centroid0;
 
   //for probe movement
+  arma::mat arma_xyz;
   arma::mat atomcoords_0;
   arma::mat atomcoords;
   arma::mat weights;
   arma::mat wCov; // weighted covariance matrix
-  arma::vec eigenvalues;
-  arma::mat eigenvectors;
-  arma::mat eigenvectors_sorted;
-  arma::mat B;
+  arma::mat U;
+  arma::vec s;
+  arma::mat V;
   arma::mat R; //rotation matrix
 
  public:
@@ -61,6 +62,7 @@ class Probe
 
     void calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
     void kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass);
+    void move_probe();
 
     void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
     void calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);

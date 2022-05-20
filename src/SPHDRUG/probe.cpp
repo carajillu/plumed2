@@ -44,16 +44,17 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   dSoff_r_dz=vector<double>(n_atoms,0);
 
   xyz=vector<double>(3,0);
+  arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
+  centroid0=vector<double>(3,0);
 
   atomcoords_0=arma::mat(n_atoms,3,arma::fill::zeros);
   atomcoords=arma::mat(n_atoms,3,arma::fill::zeros); //This is directly transposed
   weights=arma::mat(n_atoms,n_atoms,arma::fill::zeros);
   wCov=arma::mat(3,3,arma::fill::zeros);
-  eigenvalues=arma::vec(3,arma::fill::zeros);
-  eigenvectors=arma::mat(3,3,arma::fill::zeros);
-  eigenvectors_sorted=arma::mat(3,3,arma::fill::zeros);
-  B=arma::mat(3,3,arma::fill::zeros);
+  U=arma::mat(3,3,arma::fill::zeros);
+  s=arma::vec(3,arma::fill::zeros);
+  V=arma::mat(3,3,arma::fill::zeros);
   R=arma::mat(3,3,arma::fill::zeros); //Rotation matrix. filled with zeros to make sure step 0 gives Identity Matrix
 }
 
@@ -107,18 +108,18 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
  centroid[0]=0;
  centroid[1]=0;
  centroid[2]=0;
- 
+ /*
  for (unsigned j=0; j<n_atoms;j++)
  {
    centroid[0]+=atoms_x[j]*Soff_r[j];
    centroid[1]+=atoms_y[j]*Soff_r[j];
    centroid[2]+=atoms_z[j]*Soff_r[j];
-   total_Soff+=Soff_r[j];
  }
  centroid[0]/=total_Soff;
  centroid[1]/=total_Soff;
  centroid[2]/=total_Soff;
- /*
+ */
+ total_Soff=0;
 for (unsigned j=0; j<n_atoms;j++)
  {
    centroid[0]+=atoms_x[j];
@@ -129,11 +130,12 @@ for (unsigned j=0; j<n_atoms;j++)
  centroid[0]/=total_Soff;
  centroid[1]/=total_Soff;
  centroid[2]/=total_Soff;
- */
+ //*/
 }
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
 {
+ 
  for (unsigned j=0; j<n_atoms;j++)
  {
    if (step==0)
@@ -148,39 +150,52 @@ void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y
 
    weights.row(j).col(j)=Soff_r[j]; //This can be memory expensive!
  }
-
  //Obtain rotmat with Kabsch Algorithm
  //we want to rotate atomcoords_0 into atomcoords, and NOT the other way round
 
- //wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
- wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate weighted covariance matrix
- cout << "wCov" << endl;
- wCov.print();
- cout << "wCov2" << endl;
- wCov=wCov*arma::trans(wCov); //square the weighted covariance matrix (it is symmetrical so its transposed is the same)
- wCov.print();
-
+ wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
+ //wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate weighted covariance matrix
  
  //SVD of wCov
- arma::mat U;
- arma::vec s;
- arma::mat V;
-
  arma::svd(U,s,V,wCov);
- U.print();
- s.print();
- V.print();
-
- // Calculate R (finally!)
- cout << "R" << endl;
+ 
+ // Calculate R 
+ //cout << "R" << endl;
  R=V*arma::trans(U);
- R.print();
- 
-  
+ //R.print();
+
  //backup atomcoords
- atomcoords_0=atomcoords;
  
  
+  for (unsigned i=0;i<3;i++)
+  {
+   for (unsigned j=0;j<n_atoms;j++)
+   {
+     atomcoords_0.row(j).col(i)=atomcoords.row(j).col(i);
+   }
+   centroid0[i]=centroid[i];
+  }
+ 
+}
+
+void Probe::move_probe()
+{
+  //cout << "probe0: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  //cout << "centroid0; " << centroid0[0] << " " << centroid0[1] << " " << centroid0[2] << endl;
+
+  arma_xyz.row(0).col(0)=xyz[0]-centroid0[0];
+  arma_xyz.row(0).col(1)=xyz[1]-centroid0[1];
+  arma_xyz.row(0).col(2)=xyz[2]-centroid0[2];
+
+  arma_xyz=arma_xyz*R;
+  //R.print();
+  //arma_xyz.print();
+  xyz[0]=arma::as_scalar(arma_xyz.row(0).col(0))+centroid[0];
+  xyz[1]=arma::as_scalar(arma_xyz.row(0).col(1))+centroid[1];
+  xyz[2]=arma::as_scalar(arma_xyz.row(0).col(2))+centroid[2];
+
+  //cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  //cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
 }
 
 void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)
