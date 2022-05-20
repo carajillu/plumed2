@@ -107,7 +107,7 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
  centroid[0]=0;
  centroid[1]=0;
  centroid[2]=0;
- /*
+ 
  for (unsigned j=0; j<n_atoms;j++)
  {
    centroid[0]+=atoms_x[j]*Soff_r[j];
@@ -118,7 +118,7 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
  centroid[0]/=total_Soff;
  centroid[1]/=total_Soff;
  centroid[2]/=total_Soff;
- */
+ /*
 for (unsigned j=0; j<n_atoms;j++)
  {
    centroid[0]+=atoms_x[j];
@@ -129,6 +129,7 @@ for (unsigned j=0; j<n_atoms;j++)
  centroid[0]/=total_Soff;
  centroid[1]/=total_Soff;
  centroid[2]/=total_Soff;
+ */
 }
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
@@ -151,8 +152,8 @@ void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y
  //Obtain rotmat with Kabsch Algorithm
  //we want to rotate atomcoords_0 into atomcoords, and NOT the other way round
 
- wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
- //wCov=atomcoords*weights*atomcoords_0; //calculate weighted covariance matrix
+ //wCov=arma::trans(atomcoords)*atomcoords_0; //calculate weighted covariance matrix
+ wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate weighted covariance matrix
  cout << "wCov" << endl;
  wCov.print();
  cout << "wCov2" << endl;
