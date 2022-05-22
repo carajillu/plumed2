@@ -1,6 +1,5 @@
 #include <vector>
 #include "tools/PDB.h"
-#include <eigen3/Eigen/Geometry>
 #include <armadillo>
 
 using namespace std;
