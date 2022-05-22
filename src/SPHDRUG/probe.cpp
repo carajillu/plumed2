@@ -167,22 +167,22 @@ void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y
 
 void Probe::move_probe()
 {
-  cout << "probe0: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
-  cout << "centroid0; " << centroid0[0] << " " << centroid0[1] << " " << centroid0[2] << endl;
+  //cout << "probe0: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  //cout << "centroid0; " << centroid0[0] << " " << centroid0[1] << " " << centroid0[2] << endl;
 
   arma_xyz.row(0).col(0)=xyz[0]-centroid0[0];
   arma_xyz.row(0).col(1)=xyz[1]-centroid0[1];
   arma_xyz.row(0).col(2)=xyz[2]-centroid0[2];
 
   arma_xyz=arma_xyz*R;
-  R.print();
+  //R.print();
   //arma_xyz.print();
   xyz[0]=arma::as_scalar(arma_xyz.row(0).col(0))+centroid[0];
   xyz[1]=arma::as_scalar(arma_xyz.row(0).col(1))+centroid[1];
   xyz[2]=arma::as_scalar(arma_xyz.row(0).col(2))+centroid[2];
 
-  cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
-  cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
+  //cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
+  //cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
 }
 
 void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)
