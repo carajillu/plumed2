@@ -91,8 +91,8 @@ if __name__=="__main__":
         mind_r_lst.append(mind_r(point,crd))
 
     k=1
-    v0=0
-    deltaV=0.45
+    v0=0.45
+    deltaV=0.05
     mind_c_lst=[]
     for point in points:
         mind_c_lst.append(mind_c(point,crd,k,v0,deltaV))
