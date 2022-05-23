@@ -197,13 +197,13 @@ void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector
 
  for (unsigned j=0; j<n_atoms;j++)
  {
-   centroid[0]+=atoms_x[j]*Soff_r[j];
-   centroid[1]+=atoms_y[j]*Soff_r[j];
-   centroid[2]+=atoms_z[j]*Soff_r[j];
+   centroid[0]+=atoms_x[j];
+   centroid[1]+=atoms_y[j];
+   centroid[2]+=atoms_z[j];
  }
- centroid[0]/=total_Soff;
- centroid[1]/=total_Soff;
- centroid[2]/=total_Soff;
+ centroid[0]/=n_atoms;
+ centroid[1]/=n_atoms;
+ centroid[2]/=n_atoms;
 }
 
 void Probe::kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
