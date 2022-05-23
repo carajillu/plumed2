@@ -38,6 +38,25 @@ class Probe
   vector<double> dSoff_r_dy;
   vector<double> dSoff_r_dz;
 
+  double mind;
+  vector<double> dmind_dx;
+  vector<double> dmind_dy;
+  vector<double> dmind_dz;
+  void calculate_mind(unsigned n_atoms);
+
+  double CC;
+  double dCC_dr;
+  vector<double> dCC_dx;
+  vector<double> dCC_dy;
+  vector<double> dCC_dz;
+  void calculate_CC(unsigned n_atoms);
+
+  double H;
+  vector<double> dH_dx;
+  vector<double> dH_dy;
+  vector<double> dH_dz;
+  void calculate_H(unsigned n_atoms);
+
   //coordinates
   vector<double> xyz;
   vector<double> centroid;
@@ -65,6 +84,12 @@ class Probe
 
     void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
     void calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
+    
+    double activity;
+    vector<double> d_activity_dx;
+    vector<double> d_activity_dy;
+    vector<double> d_activity_dz;
+    void calculate_activity(unsigned n_atoms);
 
     void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z);
     void print_probe_xyz(int id, int step);

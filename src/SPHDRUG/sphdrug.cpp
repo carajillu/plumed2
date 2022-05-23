@@ -259,12 +259,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("MINDSLOPE", mind_slope);
       if (!mind_slope)
-        mind_slope = 1.227666; // obtained from generating 10000 random points in VHL's crystal structure
+        mind_slope = 1; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "MINDSLOPE = " << mind_slope << endl;
 
       parse("MINDINTERCEPT", mind_intercept);
       if (!mind_intercept)
-        mind_intercept = -0.089870; // obtained from generating 10000 random points in VHL's crystal structure
+        mind_intercept = 0; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "MINDINTERCEPT = " << mind_intercept << " nm" << endl;
 
       parse("DMIN", Dmin);
@@ -550,7 +550,25 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         probes[i].move_probe();
         probes[i].calculate_r(atoms_x, atoms_y, atoms_z, n_atoms);
         probes[i].calculate_Soff_r(atoms_x, atoms_y, atoms_z, n_atoms);
+        probes[i].calculate_activity(n_atoms);
+        sphdrug+=probes[i].activity/nprobes;
+        for (unsigned j=0;j<n_atoms;j++)
+        {
+          d_Sphdrug_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
+          d_Sphdrug_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
+          d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+        }
       }
+
+      if (!nodxfix) 
+         correct_derivatives();
+   
+      setValue(sphdrug);
+      for (unsigned j=0;j<n_atoms;j++)
+      {
+        setAtomsDerivatives(j,Vector(d_Sphdrug_dx[j],d_Sphdrug_dy[j],d_Sphdrug_dz[j]));
+      }
+
       
       //print output for post_processing
       if (step % probestride == 0)
@@ -570,7 +588,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       auto end_psi = high_resolution_clock::now();
       int exec_time = duration_cast<microseconds>(end_psi - start_psi).count();
-      // cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
+      //cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
 
       // if (step>=10) exit(0);
 

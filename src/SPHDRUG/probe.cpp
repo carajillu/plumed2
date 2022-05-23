@@ -48,6 +48,22 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
 
+  dmind_dx=vector<double>(n_atoms,0);
+  dmind_dy=vector<double>(n_atoms,0);
+  dmind_dz=vector<double>(n_atoms,0);
+
+  dCC_dx=vector<double>(n_atoms,0);
+  dCC_dy=vector<double>(n_atoms,0);
+  dCC_dz=vector<double>(n_atoms,0);
+
+  dH_dx=vector<double>(n_atoms,0);
+  dH_dy=vector<double>(n_atoms,0);
+  dH_dz=vector<double>(n_atoms,0);
+
+  d_activity_dx=vector<double>(n_atoms,0);
+  d_activity_dy=vector<double>(n_atoms,0);
+  d_activity_dz=vector<double>(n_atoms,0);
+
   atomcoords_0=arma::mat(n_atoms,3,arma::fill::zeros);
   atomcoords=arma::mat(n_atoms,3,arma::fill::zeros); //This is directly transposed
   weights=arma::mat(n_atoms,n_atoms,arma::fill::zeros);
@@ -99,6 +115,76 @@ void Probe::calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vec
   dSoff_r_dx[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dx[j];
   dSoff_r_dy[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dy[j];
   dSoff_r_dz[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dz[j];
+ }
+}
+
+void Probe::calculate_mind(unsigned n_atoms)
+{
+ double sum_prod=0;
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+   sum_prod+=Soff_r[j]*r[j];
+ }
+ if (total_Soff<0.000001) //avoid 0/0 error
+ {
+   mind=0;
+ }
+ else
+ {
+   mind=mind_slope*(sum_prod/total_Soff)+mind_intercept; 
+   for (unsigned j=0;j<r.size();j++)
+   {
+     dmind_dx[j]=mind_slope*(((dSoff_r_dx[j]*r[j]+dr_dx[j]*Soff_r[j])*total_Soff)-(dSoff_r_dx[j]*sum_prod))/pow(total_Soff,2);
+     dmind_dy[j]=mind_slope*(((dSoff_r_dy[j]*r[j]+dr_dy[j]*Soff_r[j])*total_Soff)-(dSoff_r_dy[j]*sum_prod))/pow(total_Soff,2);
+     dmind_dz[j]=mind_slope*(((dSoff_r_dz[j]*r[j]+dr_dz[j]*Soff_r[j])*total_Soff)-(dSoff_r_dz[j]*sum_prod))/pow(total_Soff,2);
+   }
+ }
+
+ //mind_check
+ double mind_real=INFINITY;
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+  if (r[j]<mind_real) mind_real=r[j];
+ }
+}
+
+void Probe::calculate_CC(unsigned n_atoms)
+{
+ double m=(mind-CCmin)/deltaCC;
+ CC=Son_m(m,1);
+ double dCC=dSon_dm(m,1)*dm_dv(deltaCC);
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+   dCC_dx[j]=dCC*dmind_dx[j];
+   dCC_dy[j]=dCC*dmind_dy[j];
+   dCC_dz[j]=dCC*dmind_dz[j];
+ }
+}
+
+void Probe::calculate_H(unsigned n_atoms)
+{
+ double m=(mind-CCmax)/deltaCC;
+ H=Soff_m(m,1);
+ double dH=dSoff_dm(m,1)*dm_dv(deltaCC);
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+   dH_dx[j]=dH*dmind_dx[j];
+   dH_dy[j]=dH*dmind_dy[j];
+   dH_dz[j]=dH*dmind_dz[j];
+ }
+}
+
+void Probe::calculate_activity(unsigned n_atoms)
+{
+ calculate_mind(n_atoms);
+ calculate_CC(n_atoms);
+ calculate_H(n_atoms);
+ activity=CC*H;
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+   d_activity_dx[j]=dCC_dx[j]*H+dH_dx[j]*CC;
+   d_activity_dy[j]=dCC_dy[j]*H+dH_dy[j]*CC;
+   d_activity_dz[j]=dCC_dz[j]*H+dH_dz[j]*CC;
  }
 }
 
