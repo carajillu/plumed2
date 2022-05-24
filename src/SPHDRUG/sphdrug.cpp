@@ -55,6 +55,7 @@ namespace PLMD
       // MD control variables
       bool pbc;
       // CV control variables
+      bool nocvcalc;
       bool nodxfix;
       bool noupdate;
       // Variables necessary to check results
@@ -132,6 +133,7 @@ namespace PLMD
     {
       Colvar::registerKeywords(keys);
       keys.addFlag("DEBUG", false, "Running in debug mode");
+      keys.addFlag("NOCVCALC", false, "skip CV calculation");
       keys.addFlag("NOUPDATE", false, "skip probe update");
       keys.addFlag("NODXFIX", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
@@ -152,6 +154,7 @@ namespace PLMD
 
     Sphdrug::Sphdrug(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
                                                 pbc(true),
+                                                nocvcalc(false),
                                                 noupdate(false),
                                                 nodxfix(false),
                                                 performance(false),
@@ -175,6 +178,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("NOPBC", nopbc);
       pbc = !nopbc;
 
+      parseFlag("NOCVCALC",nocvcalc);
       parseFlag("NOUPDATE", noupdate);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
@@ -305,6 +309,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       d_Sphdrug_dx = vector<double>(n_atoms, 0);
       d_Sphdrug_dy = vector<double>(n_atoms, 0);
       d_Sphdrug_dz = vector<double>(n_atoms, 0);
+
+      if (nocvcalc)
+         cout << "WARNING: NOCVCALC flag has been included. CV will NOT be calculated." << endl;
+
       if (!nodxfix)
       {
         cout << "---------Initialisng correction of Sphdrug derivatives---------" << endl;
@@ -550,15 +558,17 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         probes[i].move_probe();
         probes[i].calculate_r(atoms_x, atoms_y, atoms_z, n_atoms);
         probes[i].calculate_Soff_r(atoms_x, atoms_y, atoms_z, n_atoms);
-        probes[i].calculate_activity(n_atoms);
-        sphdrug+=probes[i].activity/nprobes;
-        for (unsigned j=0;j<n_atoms;j++)
+        if (!nocvcalc)
         {
-          d_Sphdrug_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
-          d_Sphdrug_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
-          d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+          probes[i].calculate_activity(n_atoms);
+          sphdrug+=probes[i].activity/nprobes;
+          for (unsigned j=0;j<n_atoms;j++)
+          {
+            d_Sphdrug_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
+            d_Sphdrug_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
+            d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+          }
         }
-      }
 
       if (!nodxfix) 
          correct_derivatives();
@@ -571,24 +581,28 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       
       //print output for post_processing
-      if (step % probestride == 0)
-      {
-        print_protein();
-        for (unsigned i=0; i<nprobes;i++)
-        {
-         // Get coordinates of the reference atom (change to target at some point?)
-         int j = n_atoms + i;
-         double ref_x = getPosition(j)[0];
-         double ref_y = getPosition(j)[1];
-         double ref_z = getPosition(j)[2];
-         probes[i].print_probe_xyz(i, step);
-         probes[i].print_probe_movement(i, step, atoms, n_atoms, ref_x, ref_y, ref_z);
-        }
+       if (step % probestride == 0)
+       {
+         print_protein();
+         for (unsigned i=0; i<nprobes;i++)
+         {
+          // Get coordinates of the reference atom (change to target at some point?)
+          int j = n_atoms + i;
+          double ref_x = getPosition(j)[0];
+          double ref_y = getPosition(j)[1];
+          double ref_z = getPosition(j)[2];
+          probes[i].print_probe_xyz(i, step);
+          probes[i].print_probe_movement(i, step, atoms, n_atoms, ref_x, ref_y, ref_z);
+         }
+       }
       }
 
-      auto end_psi = high_resolution_clock::now();
-      int exec_time = duration_cast<microseconds>(end_psi - start_psi).count();
-      //cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
+      if (performance)
+      {
+       auto end_psi = high_resolution_clock::now();
+       int exec_time = duration_cast<microseconds>(end_psi - start_psi).count();
+       cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
+      }
 
       // if (step>=10) exit(0);
 
