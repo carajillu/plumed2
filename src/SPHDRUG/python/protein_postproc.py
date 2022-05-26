@@ -8,7 +8,7 @@ def parse():
     parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default="protein.xyz")
     parser.add_argument('-p','--probe', nargs="?", help="probe file issued by plumed",default="probe-0.xyz")
-    parser.add_argument('-o','--output', nargs="?", help="Probe output in xyz format",default="probe-0-out.xyz")
+    parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein.pdb")
 
     args = parser.parse_args()
     return args
