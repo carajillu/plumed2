@@ -72,6 +72,7 @@ class Probe
   arma::vec s;
   arma::mat V;
   arma::mat R; //rotation matrix
+  void kabsch();
 
  public:
     Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
@@ -79,8 +80,8 @@ class Probe
     void place_probe(double x, double y, double z);
 
     void calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
-    void kabsch(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass);
-    void move_probe();
+    
+    void move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass);
 
     void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
     void calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);

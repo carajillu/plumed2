@@ -554,8 +554,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
         // Update probe coordinates
         probes[i].calc_centroid(atoms_x, atoms_y, atoms_z, n_atoms);
-        probes[i].kabsch(step, atoms_x, atoms_y, atoms_z, n_atoms, masses, total_mass);
-        probes[i].move_probe();
+        probes[i].move_probe(step, atoms_x, atoms_y, atoms_z, n_atoms, masses, total_mass);
         probes[i].calculate_r(atoms_x, atoms_y, atoms_z, n_atoms);
         probes[i].calculate_Soff_r(atoms_x, atoms_y, atoms_z, n_atoms);
         if (!nocvcalc)
