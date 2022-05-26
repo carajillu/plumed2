@@ -162,14 +162,14 @@ void Probe::calculate_CC(unsigned n_atoms)
 
 void Probe::calculate_H(unsigned n_atoms)
 {
- double m=(mind-CCmax)/deltaCC;
- H=Soff_m(m,1);
- double dH=dSoff_dm(m,1)*dm_dv(deltaCC);
+ double m=(total_Soff-Dmin)/deltaD;
+ H=Son_m(m,1);
+ double dH=dSon_dm(m,1)*dm_dv(deltaD);
  for (unsigned j=0;j<n_atoms;j++)
  {
-   dH_dx[j]=dH*dmind_dx[j];
-   dH_dy[j]=dH*dmind_dy[j];
-   dH_dz[j]=dH*dmind_dz[j];
+   dH_dx[j]=dH*dSoff_r_dx[j];
+   dH_dy[j]=dH*dSoff_r_dy[j];
+   dH_dz[j]=dH*dSoff_r_dz[j];
  }
 }
 
@@ -273,13 +273,13 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   filename.append(to_string(id));
   //filename.append("-step-");
   //filename.append(to_string(step));
-  filename.append("-movement.csv");
+  filename.append("-stats.csv");
   ofstream wfile;
   if (step==0)
   {
    wfile.open(filename.c_str());
    //wfile << "Step j j_index Soff_r" << endl;
-   wfile << "Dref" << endl;
+   wfile << "Step Dref mind CC total_soff H Psi" << endl;
   }
   else
   {
@@ -292,7 +292,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << r << endl;
+  wfile << step << " " << r << " " << mind << " " << CC << " " << total_Soff << " " << H << " " << activity << " " << endl;
   wfile.close();
 }
 
