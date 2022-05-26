@@ -66,7 +66,6 @@ class Probe
   arma::mat arma_xyz;
   arma::mat atomcoords_0;
   arma::mat atomcoords;
-  arma::mat weights;
   arma::mat wCov; // weighted covariance matrix
   arma::mat U;
   arma::vec s;
