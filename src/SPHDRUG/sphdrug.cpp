@@ -361,7 +361,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         sum_t_dy += atoms_z[j] * d_Sphdrug_dx[j] - atoms_x[j] * d_Sphdrug_dz[j];
         sum_t_dz += atoms_x[j] * d_Sphdrug_dy[j] - atoms_y[j] * d_Sphdrug_dx[j];
       }
-      cout << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " " << endl;
       L[0] = -sum_d_dx;
       L[1] = -sum_d_dy;
       L[2] = -sum_d_dz;
