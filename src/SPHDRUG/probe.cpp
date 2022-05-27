@@ -16,9 +16,9 @@ using namespace std;
 using namespace COREFUNCTIONS;
 
 
-Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms)
+Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms)
 {
-  rprobe=Rprobe; // radius of each spherical probe
+  n_atoms=N_atoms;
   mind_slope=Mind_slope; //slope of the mind linear implementation
   mind_intercept=Mind_intercept; //intercept of the mind linear implementation
   CCmin=CCMin; // mind below which an atom is considered to be clashing with the probe 
@@ -26,8 +26,6 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   deltaCC=DeltaCC; // interval over which contact terms are turned on and off
   Dmin=DMin; // packing factor below which depth term equals 0
   deltaD=DeltaD; // interval over which depth term turns from 0 to 1
-  Pmax=Dmin+deltaD; // number of atoms surrounding the probe for it to be considered completely packed
-
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -42,6 +40,11 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   dSoff_r_dx=vector<double>(n_atoms,0);
   dSoff_r_dy=vector<double>(n_atoms,0);
   dSoff_r_dz=vector<double>(n_atoms,0);
+
+  Son_r=vector<double>(n_atoms,0);
+  dSon_r_dx=vector<double>(n_atoms,0);
+  dSon_r_dy=vector<double>(n_atoms,0);
+  dSon_r_dz=vector<double>(n_atoms,0);
 
   xyz=vector<double>(3,0);
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
@@ -82,7 +85,7 @@ void Probe::place_probe(double x, double y, double z)
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
-void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
+void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
  #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
@@ -100,7 +103,7 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
 }
 
 //Calculate Soff_r and all their derivatives
-void Probe::calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
+void Probe::calculate_Soff_r()
 {
  total_Soff=0;
  #pragma omp parallel for reduction(+:total_Soff)
@@ -117,7 +120,22 @@ void Probe::calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vec
  }
 }
 
-void Probe::calculate_mind(unsigned n_atoms)
+void Probe::calculate_Son_r()
+{
+ #pragma omp parallel for reduction(+:total_Soff)
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  double m_r=COREFUNCTIONS::m_v(r[j],0,CCmax);
+  double dm_dr=COREFUNCTIONS::dm_dv(CCmax);
+
+  Son_r[j]=COREFUNCTIONS::Son_m(m_r,1);
+  dSon_r_dx[j]=COREFUNCTIONS::dSon_dm(m_r,1)*dm_dr*dr_dx[j];
+  dSon_r_dy[j]=COREFUNCTIONS::dSon_dm(m_r,1)*dm_dr*dr_dy[j];
+  dSon_r_dz[j]=COREFUNCTIONS::dSon_dm(m_r,1)*dm_dr*dr_dz[j];
+ }
+}
+
+void Probe::calculate_mind()
 {
  double sum_prod=0;
  for (unsigned j=0;j<n_atoms;j++)
@@ -140,18 +158,20 @@ void Probe::calculate_mind(unsigned n_atoms)
  }
 
  //mind_check
+ /*
  double mind_real=INFINITY;
  for (unsigned j=0;j<n_atoms;j++)
  {
   if (r[j]<mind_real) mind_real=r[j];
  }
+ */
 }
 
-void Probe::calculate_CC(unsigned n_atoms)
+void Probe::calculate_CC()
 {
- double m=(mind-CCmin)/deltaCC;
+ double m=mind/CCmin;
  CC=Son_m(m,1);
- double dCC=dSon_dm(m,1)*dm_dv(deltaCC);
+ double dCC=dSon_dm(m,1)*dm_dv(CCmin);
  for (unsigned j=0;j<n_atoms;j++)
  {
    dCC_dx[j]=dCC*dmind_dx[j];
@@ -160,7 +180,7 @@ void Probe::calculate_CC(unsigned n_atoms)
  }
 }
 
-void Probe::calculate_H(unsigned n_atoms)
+void Probe::calculate_H()
 {
  double m=(total_Soff-Dmin)/deltaD;
  H=Son_m(m,1);
@@ -173,11 +193,14 @@ void Probe::calculate_H(unsigned n_atoms)
  }
 }
 
-void Probe::calculate_activity(unsigned n_atoms)
+void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
- calculate_mind(n_atoms);
- calculate_CC(n_atoms);
- calculate_H(n_atoms);
+ calculate_r(atoms_x,atoms_y,atoms_z);
+ calculate_Soff_r();
+ calculate_Son_r();
+ calculate_mind();
+ calculate_CC();
+ calculate_H();
  activity=CC*H;
  for (unsigned j=0;j<n_atoms;j++)
  {
@@ -185,24 +208,6 @@ void Probe::calculate_activity(unsigned n_atoms)
    d_activity_dy[j]=dCC_dy[j]*H+dH_dy[j]*CC;
    d_activity_dz[j]=dCC_dz[j]*H+dH_dz[j]*CC;
  }
-}
-
-//calculate a weighted centroid as a reference to move the probe
-void Probe::calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms)
-{
- centroid[0]=0;
- centroid[1]=0;
- centroid[2]=0;
-
- for (unsigned j=0; j<n_atoms;j++)
- {
-   centroid[0]+=atoms_x[j];
-   centroid[1]+=atoms_y[j];
-   centroid[2]+=atoms_z[j];
- }
- centroid[0]/=n_atoms;
- centroid[1]/=n_atoms;
- centroid[2]/=n_atoms;
 }
 
 void Probe::kabsch()
@@ -218,7 +223,7 @@ void Probe::kabsch()
  //R.print();
 }
 
-void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass)
+void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
  for (unsigned j=0; j<n_atoms;j++)
   {

@@ -11,13 +11,12 @@ class Probe
 {
  private:
   //parameters
-  double rprobe; // radius of each spherical probe
+  unsigned n_atoms;
   double mind_slope; //slope of the mind linear implementation
   double mind_intercept; //intercept of the mind linear implementation
   double CCmin; // mind below which an atom is considered to be clashing with the probe 
   double CCmax; // distance above which an atom is considered to be too far away from the probe*
   double deltaCC; // interval over which contact terms are turned on and off
-  double Pmax; // number of atoms surrounding the probe for it to be considered completely packed
   double Dmin; // packing factor below which depth term equals 0
   double deltaD; // interval over which depth term turns from 0 to 1
   
@@ -31,31 +30,40 @@ class Probe
   vector<double> dr_dx;
   vector<double> dr_dy;
   vector<double> dr_dz;
+  void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
   vector<double> Soff_r;
   double total_Soff;
   vector<double> dSoff_r_dx;
   vector<double> dSoff_r_dy;
   vector<double> dSoff_r_dz;
+  void calculate_Soff_r();
+
+  vector<double> Son_r;
+  double total_Son;
+  vector<double> dSon_r_dx;
+  vector<double> dSon_r_dy;
+  vector<double> dSon_r_dz;
+  void calculate_Son_r();
 
   double mind;
   vector<double> dmind_dx;
   vector<double> dmind_dy;
   vector<double> dmind_dz;
-  void calculate_mind(unsigned n_atoms);
+  void calculate_mind();
 
   double CC;
   double dCC_dr;
   vector<double> dCC_dx;
   vector<double> dCC_dy;
   vector<double> dCC_dz;
-  void calculate_CC(unsigned n_atoms);
+  void calculate_CC();
 
   double H;
   vector<double> dH_dx;
   vector<double> dH_dy;
   vector<double> dH_dz;
-  void calculate_H(unsigned n_atoms);
+  void calculate_H();
 
   //coordinates
   vector<double> xyz;
@@ -77,19 +85,14 @@ class Probe
     Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
     
     void place_probe(double x, double y, double z);
-
-    void calc_centroid(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
     
-    void move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms, vector<double> masses, double total_mass);
+    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
-    void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
-    void calculate_Soff_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, unsigned n_atoms);
-    
     double activity;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
-    void calculate_activity(unsigned n_atoms);
+    void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
     void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z);
     void print_probe_xyz(int id, int step);

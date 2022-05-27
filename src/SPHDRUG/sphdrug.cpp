@@ -76,8 +76,6 @@ namespace PLMD
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
       unsigned n_atoms;               // number of atoms supplied to the CV
-      vector<double> masses;
-      double total_mass;
       vector<double> atoms_x;
       vector<double> atoms_y;
       vector<double> atoms_z;
@@ -248,7 +246,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("CCMIN", CCmin);
       if (!CCmin)
-        CCmin = 0.2;
+        CCmin = 0.45;
       cout << "CCmin = " << CCmin << " nm" << endl;
 
       parse("CCMAX", CCmax);
@@ -302,7 +300,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       atoms_x = vector<double>(n_atoms, 0);
       atoms_y = vector<double>(n_atoms, 0);
       atoms_z = vector<double>(n_atoms, 0);
-      masses = vector<double>(n_atoms, 0);
 
       cout << "---------Initialisng Sphdrug and its derivatives---------" << endl;
       sphdrug = 0;
@@ -532,11 +529,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         atoms_x[j] = getPosition(j)[0];
         atoms_y[j] = getPosition(j)[1];
         atoms_z[j] = getPosition(j)[2];
-        if (step > 0) // masses are the same throughout the simulation
-          continue;
-        // masses[j]=getMass(j);
-        masses[j] = 1;
-        total_mass += masses[j];
       }
 
       #pragma omp parallel for
@@ -549,17 +541,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           double y = getPosition(init_j[i])[1];
           double z = getPosition(init_j[i])[2];
           probes[i].place_probe(x, y, z);
-          probes[i].calculate_r(atoms_x, atoms_y, atoms_z, n_atoms);
-          probes[i].calculate_Soff_r(atoms_x, atoms_y, atoms_z, n_atoms);
         }
         // Update probe coordinates
-        probes[i].calc_centroid(atoms_x, atoms_y, atoms_z, n_atoms);
-        probes[i].move_probe(step, atoms_x, atoms_y, atoms_z, n_atoms, masses, total_mass);
-        probes[i].calculate_r(atoms_x, atoms_y, atoms_z, n_atoms);
-        probes[i].calculate_Soff_r(atoms_x, atoms_y, atoms_z, n_atoms);
+        probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
+        
         if (!nocvcalc)
         {
-          probes[i].calculate_activity(n_atoms);
+          probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
           sphdrug+=probes[i].activity/nprobes;
           for (unsigned j=0;j<n_atoms;j++)
           {
