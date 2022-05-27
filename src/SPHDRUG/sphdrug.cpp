@@ -568,6 +568,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
+      }
 
       if (!nodxfix) 
          correct_derivatives();
@@ -578,7 +579,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         setAtomsDerivatives(j,Vector(d_Sphdrug_dx[j],d_Sphdrug_dy[j],d_Sphdrug_dz[j]));
       }
 
-      
       //print output for post_processing
        if (step % probestride == 0)
        {
@@ -594,8 +594,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           probes[i].print_probe_movement(i, step, atoms, n_atoms, ref_x, ref_y, ref_z);
          }
        }
-      }
-
+      
       if (performance)
       {
        auto end_psi = high_resolution_clock::now();
