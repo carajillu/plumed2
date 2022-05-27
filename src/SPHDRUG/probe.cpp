@@ -15,8 +15,10 @@
 using namespace std;
 using namespace COREFUNCTIONS;
 
+#define zero_tol 0.000001
 
-Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms)
+
+Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms)
 {
   n_atoms=N_atoms;
   mind_slope=Mind_slope; //slope of the mind linear implementation
@@ -59,6 +61,10 @@ Probe::Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCM
   dCC_dy=vector<double>(n_atoms,0);
   dCC_dz=vector<double>(n_atoms,0);
 
+  dD_dx=vector<double>(n_atoms,0);
+  dD_dy=vector<double>(n_atoms,0);
+  dD_dz=vector<double>(n_atoms,0);
+
   dH_dx=vector<double>(n_atoms,0);
   dH_dy=vector<double>(n_atoms,0);
   dH_dz=vector<double>(n_atoms,0);
@@ -87,7 +93,6 @@ void Probe::place_probe(double x, double y, double z)
 //calculate distance between the center of the probe and the atoms, and all their derivatives
 void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
- #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
  {
    rx[j]=atoms_x[j]-xyz[0];
@@ -106,7 +111,6 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
 void Probe::calculate_Soff_r()
 {
  total_Soff=0;
- #pragma omp parallel for reduction(+:total_Soff)
  for (unsigned j=0; j<n_atoms; j++)
  {
   double m_r=COREFUNCTIONS::m_v(r[j],CCmax,deltaCC);
@@ -122,7 +126,6 @@ void Probe::calculate_Soff_r()
 
 void Probe::calculate_Son_r()
 {
- #pragma omp parallel for reduction(+:total_Soff)
  for (unsigned j=0; j<n_atoms; j++)
  {
   double m_r=COREFUNCTIONS::m_v(r[j],0,CCmax);
@@ -142,7 +145,7 @@ void Probe::calculate_mind()
  {
    sum_prod+=Soff_r[j]*r[j];
  }
- if (total_Soff<0.000001) //avoid 0/0 error
+ if (total_Soff<zero_tol) //avoid 0/0 error
  {
    mind=0;
  }
@@ -180,16 +183,29 @@ void Probe::calculate_CC()
  }
 }
 
+void Probe::calculate_D()
+{
+ D=0;
+ for (unsigned j=0;j<n_atoms;j++)
+ {
+   //cout << Son_r[j] << " " << Soff_r[j] << endl;
+   D+=Son_r[j]*Soff_r[j];
+   dD_dx[j]=dSon_r_dx[j]*Soff_r[j]+dSoff_r_dx[j]*Son_r[j];
+   dD_dy[j]=dSon_r_dy[j]*Soff_r[j]+dSoff_r_dy[j]*Son_r[j];
+   dD_dz[j]=dSon_r_dz[j]*Soff_r[j]+dSoff_r_dz[j]*Son_r[j];
+ }
+}
+
 void Probe::calculate_H()
 {
- double m=(total_Soff-Dmin)/deltaD;
+ double m=(D-Dmin)/deltaD;
  H=Son_m(m,1);
  double dH=dSon_dm(m,1)*dm_dv(deltaD);
  for (unsigned j=0;j<n_atoms;j++)
  {
-   dH_dx[j]=dH*dSoff_r_dx[j];
-   dH_dy[j]=dH*dSoff_r_dy[j];
-   dH_dz[j]=dH*dSoff_r_dz[j];
+   dH_dx[j]=dH*dD_dx[j];
+   dH_dy[j]=dH*dD_dy[j];
+   dH_dz[j]=dH*dD_dz[j];
  }
 }
 
@@ -200,6 +216,7 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  calculate_Son_r();
  calculate_mind();
  calculate_CC();
+ calculate_D();
  calculate_H();
  activity=CC*H;
  for (unsigned j=0;j<n_atoms;j++)
@@ -225,6 +242,23 @@ void Probe::kabsch()
 
 void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
+ //calculate centroid (better with COM, maybe?)
+ centroid[0]=0;
+ centroid[1]=0;
+ centroid[2]=0;
+ for (unsigned j=0; j<n_atoms;j++)
+ {
+   centroid[0]+=atoms_x[j];
+   centroid[1]+=atoms_y[j];
+   centroid[2]+=atoms_z[j];
+ }
+ centroid[0]/=n_atoms;
+ centroid[1]/=n_atoms;
+ centroid[2]/=n_atoms;
+
+ //cout << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
+
+ //remove centroid from atom coordinates
  for (unsigned j=0; j<n_atoms;j++)
   {
    if (step==0)
@@ -250,7 +284,6 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   arma_xyz.row(0).col(1)=xyz[1]-centroid0[1];
   arma_xyz.row(0).col(2)=xyz[2]-centroid0[2];
 
-  //arma_xyz=arma::trans(R*arma::trans(arma_xyz));
   arma_xyz=arma_xyz*R;
   //arma_xyz.print();
   xyz[0]=arma::as_scalar(arma_xyz.row(0).col(0))+centroid[0];
@@ -284,7 +317,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   {
    wfile.open(filename.c_str());
    //wfile << "Step j j_index Soff_r" << endl;
-   wfile << "Step Dref mind CC total_soff H Psi" << endl;
+   wfile << "Step Dref mind CC D H Psi" << endl;
   }
   else
   {
@@ -297,7 +330,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << mind << " " << CC << " " << total_Soff << " " << H << " " << activity << " " << endl;
+  wfile << step << " " << r << " " << mind << " " << CC << " " << D << " " << H << " " << activity << " " << endl;
   wfile.close();
 }
 

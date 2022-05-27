@@ -59,6 +59,12 @@ class Probe
   vector<double> dCC_dz;
   void calculate_CC();
 
+  double D;
+  vector<double> dD_dx;
+  vector<double> dD_dy;
+  vector<double> dD_dz;
+  void calculate_D();
+  
   double H;
   vector<double> dH_dx;
   vector<double> dH_dy;
@@ -82,7 +88,7 @@ class Probe
   void kabsch();
 
  public:
-    Probe(double Rprobe, double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
+    Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
     
     void place_probe(double x, double y, double z);
     

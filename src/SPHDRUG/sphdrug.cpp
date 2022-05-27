@@ -64,14 +64,13 @@ namespace PLMD
       unsigned n_target;                     // number of atoms used in TARGET
       vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
       // Parameters
-      double rprobe;         // radius of each spherical probe
-      double mind_slope;     // slope of the mind linear implementation
-      double mind_intercept; // intercept of the mind linear implementation
-      double CCmin;          // mind below which an atom is considered to be clashing with the probe
-      double CCmax;          // distance above which an atom is considered to be too far away from the probe*
-      double deltaCC;        // interval over which contact terms are turned on and off
-      double Dmin;           // packing factor below which depth term equals 0
-      double deltaD;         // interval over which depth term turns from 0 to 1
+      double mind_slope=0;     // slope of the mind linear implementation
+      double mind_intercept=0; // intercept of the mind linear implementation
+      double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
+      double CCmax=0;          // distance above which an atom is considered to be too far away from the probe*
+      double deltaCC=0;        // interval over which contact terms are turned on and off
+      double Dmin=0;           // packing factor below which depth term equals 0
+      double deltaD=0;         // interval over which depth term turns from 0 to 1
 
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
@@ -238,25 +237,19 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       cout << "Using " << nprobes << " spherical probe(s) with the following parameters:" << endl;
 
-      // Attributes of the probe object (kept private)
-      parse("RPROBE", rprobe);
-      if (!rprobe)
-        rprobe = 0.3;
-      cout << "Radius = " << rprobe << " nm" << endl;
-
       parse("CCMIN", CCmin);
       if (!CCmin)
-        CCmin = 0.45;
+        CCmin = 0.3;
       cout << "CCmin = " << CCmin << " nm" << endl;
 
       parse("CCMAX", CCmax);
       if (!CCmax)
-        CCmax = 0.5;
+        CCmax = 0.45;
       cout << "CCmax = " << CCmax << " nm" << endl;
 
       parse("DELTACC", deltaCC);
       if (!deltaCC)
-        deltaCC = 0.05;
+        deltaCC = 0.15;
       cout << "deltaCC = " << deltaCC << " nm" << endl;
 
       parse("MINDSLOPE", mind_slope);
@@ -282,7 +275,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(rprobe, mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms));
+        probes.push_back(Probe(mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
@@ -368,6 +361,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         sum_t_dy += atoms_z[j] * d_Sphdrug_dx[j] - atoms_x[j] * d_Sphdrug_dz[j];
         sum_t_dz += atoms_x[j] * d_Sphdrug_dy[j] - atoms_y[j] * d_Sphdrug_dx[j];
       }
+      cout << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " " << endl;
       L[0] = -sum_d_dx;
       L[1] = -sum_d_dy;
       L[2] = -sum_d_dz;
