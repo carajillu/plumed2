@@ -128,7 +128,7 @@ void Probe::calculate_Son_r()
 {
  for (unsigned j=0; j<n_atoms; j++)
  {
-  double m_r=COREFUNCTIONS::m_v(r[j],0,CCmax);
+  double m_r=COREFUNCTIONS::m_v(r[j],CCmin,deltaCC);
   double dm_dr=COREFUNCTIONS::dm_dv(CCmax);
 
   Son_r[j]=COREFUNCTIONS::Son_m(m_r,1);
