@@ -58,6 +58,7 @@ namespace PLMD
       bool nocvcalc;
       bool nodxfix;
       bool noupdate;
+      bool taboo;
       // Variables necessary to check results
       bool target;
       vector<PLMD::AtomNumber> atoms_target; // indices of the atoms defining the target pocket
@@ -88,7 +89,7 @@ namespace PLMD
       unsigned nprobes;     // number of spherical probes to use
 
       // Output control variables
-      unsigned probestride; // stride to print information for post-processing the probe coordinates
+      unsigned probestride=0; // stride to print information for post-processing the probe coordinates
 
       // Calculation of CV and its derivatives
 
@@ -133,6 +134,7 @@ namespace PLMD
       keys.addFlag("NOCVCALC", false, "skip CV calculation");
       keys.addFlag("NOUPDATE", false, "skip probe update");
       keys.addFlag("NODXFIX", false, "skip derivative correction");
+      keys.addFlag("TABOO", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
@@ -153,6 +155,7 @@ namespace PLMD
                                                 pbc(true),
                                                 nocvcalc(false),
                                                 noupdate(false),
+                                                taboo(false),
                                                 nodxfix(false),
                                                 performance(false),
                                                 target(true)
@@ -177,6 +180,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parseFlag("NOCVCALC",nocvcalc);
       parseFlag("NOUPDATE", noupdate);
+      parseFlag("TABOO", taboo);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
 
@@ -509,7 +513,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     // calculator
     void Sphdrug::calculate()
     {
-
+      //arma::arma_version ver;
+      //cout << ver.as_string() << endl;
+      //exit(0);
       auto start_psi = high_resolution_clock::now();
       if (pbc)
         makeWhole();
@@ -536,7 +542,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           probes[i].place_probe(x, y, z);
         }
         // Update probe coordinates
-        probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
+        if (!noupdate)
+        {
+         probes[i].move_probe(step, atoms_x, atoms_y, atoms_z,taboo);
+        }
         
         if (!nocvcalc)
         {
@@ -551,8 +560,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
       }
 
-      if (!nodxfix) 
-         correct_derivatives();
+      if (!nodxfix)
+      {
+       correct_derivatives();
+      }
    
       setValue(sphdrug);
       for (unsigned j=0;j<n_atoms;j++)

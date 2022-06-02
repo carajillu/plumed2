@@ -81,6 +81,7 @@ class Probe
   arma::mat atomcoords_0;
   arma::mat atomcoords;
   arma::mat wCov; // weighted covariance matrix
+  arma::mat weights; 
   arma::mat U;
   arma::vec s;
   arma::mat V;
@@ -92,7 +93,7 @@ class Probe
     
     void place_probe(double x, double y, double z);
     
-    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
+    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z,bool taboo);
 
     double activity;
     vector<double> d_activity_dx;
