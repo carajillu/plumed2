@@ -83,12 +83,12 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
   R=arma::mat(3,3,arma::fill::zeros); //Rotation matrix. filled with zeros to make sure step 0 gives Identity Matrix
 }
 
-// Place probe on top a specified or randomly chosen atom, only at step 0
+// Place probe on top a specified or randomly chosen atom, only at step 0. Offsetting the probe so it doesn't fall right on top of the atom (seems more stable)
 void Probe::place_probe(double x, double y, double z)
 {
-  xyz[0]=x;
-  xyz[1]=y;
-  xyz[2]=z;
+  xyz[0]=x+0.05;
+  xyz[1]=y+0.05;
+  xyz[2]=z+0.05;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
