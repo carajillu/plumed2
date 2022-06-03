@@ -114,6 +114,14 @@ namespace PLMD
       arma::vec P;
       vector<double> sum_P;
       vector<double> sum_rcrossP;
+      //for when correction of derivatives fails
+      unsigned ndxfails;
+      vector<double> cum_sum_d;
+      vector<double> cum_sum_t;
+      vector<double> d_Sphdrug_dx_old;
+      vector<double> d_Sphdrug_dy_old;
+      vector<double> d_Sphdrug_dz_old;
+      
 
     public:
       explicit Sphdrug(const ActionOptions &);
@@ -320,6 +328,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         P = arma::vec(ncols);
         sum_P = vector<double>(3, 0);
         sum_rcrossP = vector<double>(3, 0);
+        cum_sum_d=vector<double>(3,0);
+        cum_sum_t=vector<double>(3,0);
+        d_Sphdrug_dx_old = vector<double>(n_atoms, 0);
+        d_Sphdrug_dy_old = vector<double>(n_atoms, 0);
+        d_Sphdrug_dz_old = vector<double>(n_atoms, 0);
       }
       else
       {
@@ -353,10 +366,16 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
     void Sphdrug::correct_derivatives()
     {
+      
       // auto point0=high_resolution_clock::now();
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
       {
+        //if pinv() failed at the step before, we add those derivatives to the current ones
+        d_Sphdrug_dx[j]+=d_Sphdrug_dx_old[j];
+        d_Sphdrug_dy[j]+=d_Sphdrug_dy_old[j];
+        d_Sphdrug_dz[j]+=d_Sphdrug_dz_old[j];
+
         sum_d_dx += d_Sphdrug_dx[j];
         sum_d_dy += d_Sphdrug_dy[j];
         sum_d_dz += d_Sphdrug_dz[j];
@@ -411,7 +430,32 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       // auto point2=high_resolution_clock::now();
       // step3 jedi.cpp
-      Aplus = arma::pinv(A);
+      try
+      {
+        Aplus = arma::pinv(A);
+        //cout << "Step "<< step << " sum_d: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " / sum_t: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
+        fill(d_Sphdrug_dx_old.begin(), d_Sphdrug_dx_old.end(), 0);
+        fill(d_Sphdrug_dy_old.begin(), d_Sphdrug_dy_old.end(), 0);
+        fill(d_Sphdrug_dz_old.begin(), d_Sphdrug_dz_old.end(), 0);
+      }
+      catch(...)
+      {
+        ndxfails++;
+        cum_sum_d[0]+=sum_d_dx;
+        cum_sum_d[1]+=sum_d_dy;
+        cum_sum_d[2]+=sum_d_dz;
+        cum_sum_t[0]+=sum_t_dx;
+        cum_sum_t[1]+=sum_t_dy;
+        cum_sum_t[2]+=sum_t_dz;
+        cout << "Correction of derivatives failed at step "<< step <<", this is the " << ndxfails << "th time."<< endl;
+        //cout << "Step "<< step << " sum_d: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " / sum_t: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
+        //cout << "Cummulative: sum_d: " << cum_sum_d[0] << " "<< cum_sum_d[1] << " " << cum_sum_d[2] << " / sum_t: "<< cum_sum_t[0] << " "<< cum_sum_t[1] << " " << cum_sum_t[2] << endl;
+        d_Sphdrug_dx_old=d_Sphdrug_dx;
+        d_Sphdrug_dy_old=d_Sphdrug_dy;
+        d_Sphdrug_dz_old=d_Sphdrug_dz;
+        return;
+      }
+      
 
       // auto point3=high_resolution_clock::now();
       // step4 jedi.cpp
