@@ -95,7 +95,7 @@ class Probe
     void place_probe(double x, double y, double z);
     void perturb_probe(double kpert, unsigned step);
     
-    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z,bool taboo);
+    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
     double activity;
     double activity_old;

@@ -260,7 +260,7 @@ void Probe::kabsch()
 {
  //Obtain rotmat with Kabsch Algorithm
  //we want to rotate atomcoords_0 into atomcoords, and NOT the other way round
- wCov=arma::trans(atomcoords)*weights*atomcoords_0; //calculate covariance matrix
+ wCov=arma::trans(atomcoords)*atomcoords_0; //calculate covariance matrix
  //SVD of wCov
  arma::svd(U,s,V,wCov);
  // Calculate R 
@@ -269,7 +269,7 @@ void Probe::kabsch()
  //R.print();
 }
 
-void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z, bool taboo)
+void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
  //calculate centroid (better with COM, maybe?)
  centroid[0]=0;
@@ -300,16 +300,6 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
    atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
    atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
    atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
-  }
-
-  // if taboo, update weights
-  //Update weights
-  if (taboo)
-  {
-    for (unsigned j=0; j<n_atoms;j++)
-     {
-      weights.row(j).col(j)+=Son_r[j];
-     }
   }
   //Calculate rotation matrix
   kabsch();

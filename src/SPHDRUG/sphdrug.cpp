@@ -58,7 +58,6 @@ namespace PLMD
       bool nocvcalc;
       bool nodxfix;
       bool noupdate;
-      bool taboo;
       double kpert=0;
       // Variables necessary to check results
       bool target;
@@ -163,7 +162,6 @@ namespace PLMD
                                                 pbc(true),
                                                 nocvcalc(false),
                                                 noupdate(false),
-                                                taboo(false),
                                                 nodxfix(false),
                                                 performance(false),
                                                 target(true)
@@ -188,7 +186,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parseFlag("NOCVCALC",nocvcalc);
       parseFlag("NOUPDATE", noupdate);
-      parseFlag("TABOO", taboo);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
 
@@ -285,6 +282,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "DELTAD = " << deltaD << endl;
 
       parse("KPERT",kpert);
+      cout << "KPERT = " << kpert << " nm"; 
+      if (!kpert)
+         cout << " -- POCKET SEARCH WILL NOT BE DONE ";
+      cout << endl;
 
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -587,7 +588,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         // Update probe coordinates
         if (!noupdate)
         {
-         probes[i].move_probe(step, atoms_x, atoms_y, atoms_z,taboo);
+         probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
          if (probes[i].activity<probes[i].activity_old or step==0)
          {
            probes[i].perturb_probe(kpert,step);
