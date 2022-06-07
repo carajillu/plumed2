@@ -73,6 +73,7 @@ class Probe
 
   //coordinates
   vector<double> xyz;
+  vector<double> xyz_pert;
   vector<double> centroid;
   vector<double> centroid0;
 
@@ -92,10 +93,12 @@ class Probe
     Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
     
     void place_probe(double x, double y, double z);
+    void perturb_probe(double kpert, unsigned step);
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z,bool taboo);
 
     double activity;
+    double activity_old;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;

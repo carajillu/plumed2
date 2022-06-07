@@ -59,6 +59,7 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       bool taboo;
+      double kpert=0;
       // Variables necessary to check results
       bool target;
       vector<PLMD::AtomNumber> atoms_target; // indices of the atoms defining the target pocket
@@ -155,6 +156,7 @@ namespace PLMD
       keys.add("optional", "MINDINTERCEPT", "");
       keys.add("optional", "DMIN", "");
       keys.add("optional", "DELTAD", "");
+      keys.add("optional", "KPERT", "");
     }
 
     Sphdrug::Sphdrug(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
@@ -281,6 +283,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (!deltaD)
         deltaD = 15; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "DELTAD = " << deltaD << endl;
+
+      parse("KPERT",kpert);
 
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -584,6 +588,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z,taboo);
+         if (probes[i].activity<probes[i].activity_old or step==0)
+         {
+           probes[i].perturb_probe(kpert,step);
+         }
         }
         
         if (!nocvcalc)

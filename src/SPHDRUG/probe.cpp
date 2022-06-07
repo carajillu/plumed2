@@ -49,6 +49,7 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
   dSon_r_dz=vector<double>(n_atoms,0);
 
   xyz=vector<double>(3,0);
+  xyz_pert=vector<double>(3,0);
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
@@ -86,9 +87,35 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
 // Place probe on top a specified or randomly chosen atom, only at step 0. Offsetting the probe so it doesn't fall right on top of the atom (seems more stable)
 void Probe::place_probe(double x, double y, double z)
 {
-  xyz[0]=x+0.05;
-  xyz[1]=y+0.05;
-  xyz[2]=z+0.05;
+  xyz[0]=x;
+  xyz[1]=y;
+  xyz[2]=z;
+}
+
+void Probe::perturb_probe(double kpert, unsigned step)
+{
+  random_device rd;  // only used once to initialise (seed) engine
+  mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
+
+  for (unsigned i=0; i<3;i++)
+  {
+   uniform_real_distribution<double> uni(-1, 1); // guaranteed unbiased
+   auto random_double = uni(rng);
+   xyz_pert[i]=random_double;
+  }
+  double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
+  double k;
+  if (step==0)
+  {
+   k=0.05/norm; //little perturbation at step 0 to avoid crashes of arma::svd()
+  }
+  else
+  {
+    k=kpert*(abs(activity-activity_old))/norm;
+  }
+  xyz[0]+=xyz_pert[0]*k;
+  xyz[1]+=xyz_pert[1]*k;
+  xyz[2]+=xyz_pert[2]*k;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -212,6 +239,7 @@ void Probe::calculate_H()
 
 void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
+ activity_old=activity;
  calculate_r(atoms_x,atoms_y,atoms_z);
  calculate_Soff_r();
  calculate_Son_r();
