@@ -414,7 +414,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           A.row(0).col(j) = 0.0;
           A.row(1).col(j) = 1.0;
           A.row(2).col(j) = 0.0;
-          A.row(3).col(j) = atoms_z[j - n_atoms];
+          A.row(3).col(j) = -atoms_z[j - n_atoms];
           A.row(4).col(j) = 0.0;
           A.row(5).col(j) = atoms_x[j - n_atoms];
         }
