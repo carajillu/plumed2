@@ -115,11 +115,7 @@ namespace PLMD
       vector<double> sum_P;
       vector<double> sum_rcrossP;
       //for when correction of derivatives fails
-      unsigned ndxfails;
-      vector<double> d_Sphdrug_dx_old;
-      vector<double> d_Sphdrug_dy_old;
-      vector<double> d_Sphdrug_dz_old;
-      
+      double err_tol=0.00000001; //1e-8
 
     public:
       explicit Sphdrug(const ActionOptions &);
@@ -331,9 +327,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         P = arma::vec(ncols);
         sum_P = vector<double>(3, 0);
         sum_rcrossP = vector<double>(3, 0);
-        d_Sphdrug_dx_old = vector<double>(n_atoms, 0);
-        d_Sphdrug_dy_old = vector<double>(n_atoms, 0);
-        d_Sphdrug_dz_old = vector<double>(n_atoms, 0);
       }
       else
       {
@@ -372,11 +365,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        //if pinv() failed at the step before, we add those derivatives to the current ones
-        d_Sphdrug_dx[j]+=d_Sphdrug_dx_old[j];
-        d_Sphdrug_dy[j]+=d_Sphdrug_dy_old[j];
-        d_Sphdrug_dz[j]+=d_Sphdrug_dz_old[j];
-
         sum_d_dx += d_Sphdrug_dx[j];
         sum_d_dy += d_Sphdrug_dy[j];
         sum_d_dz += d_Sphdrug_dz[j];
@@ -431,30 +419,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       // auto point2=high_resolution_clock::now();
       // step3 jedi.cpp
-      try
-      {
-        Aplus = arma::pinv(A);
-        //cout << "Step "<< step << " sum_d: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " / sum_t: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
-        fill(d_Sphdrug_dx_old.begin(), d_Sphdrug_dx_old.end(), 0);
-        fill(d_Sphdrug_dy_old.begin(), d_Sphdrug_dy_old.end(), 0);
-        fill(d_Sphdrug_dz_old.begin(), d_Sphdrug_dz_old.end(), 0);
-      }
-      catch(...)
-      {
-        ndxfails++;
-        cout << "Correction of derivatives failed at step "<< step <<", this is the " << ndxfails << "th time."<< endl;
-        //cout << "Step "<< step << " sum_d: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << " / sum_t: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
-        //cout << "Cummulative: sum_d: " << cum_sum_d[0] << " "<< cum_sum_d[1] << " " << cum_sum_d[2] << " / sum_t: "<< cum_sum_t[0] << " "<< cum_sum_t[1] << " " << cum_sum_t[2] << endl;
-        #pragma omp parallel for
-        for (unsigned j=0;j<n_atoms;j++)
-         {
-          d_Sphdrug_dx_old[j]=d_Sphdrug_dx[j];
-          d_Sphdrug_dy_old[j]=d_Sphdrug_dy[j];
-          d_Sphdrug_dz_old[j]=d_Sphdrug_dz[j];
-         }
-        
-        return;
-      }
+      Aplus = arma::pinv(A);
       
 
       // auto point3=high_resolution_clock::now();
@@ -483,7 +448,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // auto point5=high_resolution_clock::now();
 
       // Only for debugging
-      /*
+      
       sum_d_dx=0;
       sum_d_dy=0;
       sum_d_dz=0;
@@ -497,24 +462,20 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        sum_d_dy+=d_Sphdrug_dy[j];
        sum_d_dz+=d_Sphdrug_dz[j];
 
-       sum_t_dx+=atom_crd[j][1]*d_Sphdrug_dz[j]-atom_crd[j][2]*d_Sphdrug_dy[j];
-       sum_t_dy+=atom_crd[j][2]*d_Sphdrug_dx[j]-atom_crd[j][0]*d_Sphdrug_dz[j];
-       sum_t_dz+=atom_crd[j][0]*d_Sphdrug_dy[j]-atom_crd[j][1]*d_Sphdrug_dx[j];
+       sum_t_dx+=atoms_y[j]*d_Sphdrug_dz[j]-atoms_z[j]*d_Sphdrug_dy[j];
+       sum_t_dy+=atoms_z[j]*d_Sphdrug_dx[j]-atoms_x[j]*d_Sphdrug_dz[j];
+       sum_t_dz+=atoms_x[j]*d_Sphdrug_dy[j]-atoms_y[j]*d_Sphdrug_dx[j];
       }
-      L[0]=-sum_d_dx;
-      L[1]=-sum_d_dy;
-      L[2]=-sum_d_dz;
-      L[3]=-sum_t_dx;
-      L[4]=-sum_t_dy;
-      L[5]=-sum_t_dz;
 
-      cout << "After: " << L[0] << " " << L[1] << " " << L[2] << " " << L[3] << " "<< L[4] << " "<< L[5] << endl;
-
-      for (unsigned k=0; k<P.size();k++)
+      if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
+          (sum_t_dx>err_tol) or (sum_t_dy>err_tol) or (sum_t_dz>err_tol))
       {
-        cout << P[k] << endl;
+      cout << "Error: Correction of derivatives malfunctioned. Simulation will now end." << endl;
+      cout << "Sum derivatives: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << endl;
+      cout << "Sum torques: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
+      exit(0);
       }
-      */
+      
       /*
       auto duration0 = duration_cast<microseconds>(point1 - point0);
       auto duration1 = duration_cast<microseconds>(point2 - point1);
