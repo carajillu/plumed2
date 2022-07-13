@@ -31,6 +31,9 @@ class Probe
   vector<double> dr_dy;
   vector<double> dr_dz;
   void calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
+  //in case the probe gets too far
+  double min_r; 
+  unsigned j_min_r;
 
   vector<double> Soff_r;
   double total_Soff;
@@ -94,11 +97,13 @@ class Probe
     
     void place_probe(double x, double y, double z);
     void perturb_probe(double kpert, unsigned step);
+
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
     double activity;
-    double activity_old;
+    double activity_cum; // cummulative activity over PERTSTRIDE steps
+    double activity_old; // cummulative activity over the last period 
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;

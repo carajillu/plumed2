@@ -49,8 +49,8 @@ namespace PLMD
     class Sphdrug : public Colvar
     {
       // Execution control variables
-      int nthreads;     // number of available OMP threads
-      int ndev;         // number of available OMP accelerators
+      int nthreads=0;     // number of available OMP threads
+      int ndev=0;         // number of available OMP accelerators
       bool performance; // print execution time
       // MD control variables
       bool pbc;
@@ -59,10 +59,11 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
+      unsigned pertstride=0;
       // Variables necessary to check results
       bool target;
       vector<PLMD::AtomNumber> atoms_target; // indices of the atoms defining the target pocket
-      unsigned n_target;                     // number of atoms used in TARGET
+      unsigned n_target=0;                     // number of atoms used in TARGET
       vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
       // Parameters
       double mind_slope=0;     // slope of the mind linear implementation
@@ -75,25 +76,25 @@ namespace PLMD
 
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
-      unsigned n_atoms;               // number of atoms supplied to the CV
+      unsigned n_atoms=0;               // number of atoms supplied to the CV
       vector<double> atoms_x;
       vector<double> atoms_y;
       vector<double> atoms_z;
-      unsigned step;
+      unsigned step=0;
 
       vector<PLMD::AtomNumber> atoms_init; // Indices of the atoms in which the probes will be initially centered
-      unsigned n_init;                     // number of atoms used in ATOMS_INIT
+      unsigned n_init=0;                     // number of atoms used in ATOMS_INIT
       vector<unsigned> init_j;             // Indices of atoms_init in getPositions()
 
       vector<Probe> probes; // This will contain all the spherical probes
-      unsigned nprobes;     // number of spherical probes to use
+      unsigned nprobes=0;     // number of spherical probes to use
 
       // Output control variables
       unsigned probestride=0; // stride to print information for post-processing the probe coordinates
 
       // Calculation of CV and its derivatives
 
-      double sphdrug;
+      double sphdrug=0;
       vector<double> d_Sphdrug_dx;
       vector<double> d_Sphdrug_dy;
       vector<double> d_Sphdrug_dz;
@@ -107,8 +108,8 @@ namespace PLMD
       double sum_t_dz;
 
       arma::vec L;
-      unsigned nrows;
-      unsigned ncols;
+      unsigned nrows=0;
+      unsigned ncols=0;
       arma::mat A;
       arma::mat Aplus;
       arma::vec P;
@@ -152,6 +153,7 @@ namespace PLMD
       keys.add("optional", "DMIN", "");
       keys.add("optional", "DELTAD", "");
       keys.add("optional", "KPERT", "");
+      keys.add("optional", "PERTSTRIDE", "");
     }
 
     Sphdrug::Sphdrug(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
@@ -281,6 +283,14 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "KPERT = " << kpert << " nm"; 
       if (!kpert)
          cout << " -- POCKET SEARCH WILL NOT BE DONE ";
+      cout << endl;
+
+      parse("PERTSTRIDE",pertstride);
+      if (!pertstride)
+         pertstride=100;
+      cout << "PERTSTRIDE = " << pertstride << " nm" << endl;
+      if (kpert)
+         cout << "Probe will be perturbed every " << pertstride << " steps";
       cout << endl;
 
       for (unsigned i = 0; i < nprobes; i++)
@@ -550,12 +560,18 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
-         if (probes[i].activity<probes[i].activity_old or step==0)
-         {
-           probes[i].perturb_probe(kpert,step);
-         }
         }
         
+        if (step%pertstride==0)
+        {
+          if (step==0 or probes[i].activity_cum<probes[i].activity_old)
+          {
+           probes[i].perturb_probe(kpert,step);
+          }
+          probes[i].activity_old=probes[i].activity_cum;
+          probes[i].activity_cum=0;
+        }
+
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);

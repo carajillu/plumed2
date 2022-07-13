@@ -104,23 +104,19 @@ void Probe::perturb_probe(double kpert, unsigned step)
    xyz_pert[i]=random_double;
   }
   double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
-  double k;
-  if (step==0)
-  {
-   k=0.05/norm; //little perturbation at step 0 to avoid crashes of arma::svd()
-  }
-  else
-  {
-    k=kpert*(abs(activity-activity_old))/norm;
-  }
+  double k=kpert/norm;
   xyz[0]+=xyz_pert[0]*k;
   xyz[1]+=xyz_pert[1]*k;
   xyz[2]+=xyz_pert[2]*k;
+
+  //cout << "Step " << step <<": displacing probe by vector " << xyz_pert[0]*k << " " << xyz_pert[1]*k << " " << xyz_pert[2]*k << endl;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
 void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
+ min_r=INFINITY;
+ j_min_r=INFINITY; 
  for (unsigned j=0; j<n_atoms; j++)
  {
    rx[j]=atoms_x[j]-xyz[0];
@@ -132,6 +128,25 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
    dr_dx[j]=rx[j]/r[j];
    dr_dy[j]=ry[j]/r[j];
    dr_dz[j]=rz[j]/r[j];
+
+   if (r[j]<min_r)
+   {
+    min_r=r[j];
+    j_min_r=j;
+   }
+ }
+
+ /*
+ If the probe gets too far from the protein
+ bring it back to the closest atom and apply
+ a small perturbation 
+ */
+ if (min_r>CCmax)
+ {
+  xyz[0]=atoms_x[j_min_r];
+  xyz[1]=atoms_y[j_min_r];
+  xyz[2]=atoms_z[j_min_r];
+  perturb_probe(0,0);
  }
 }
 
@@ -239,7 +254,6 @@ void Probe::calculate_H()
 
 void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
- activity_old=activity;
  calculate_r(atoms_x,atoms_y,atoms_z);
  calculate_Soff_r();
  calculate_Son_r();
@@ -254,6 +268,7 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
    d_activity_dy[j]=dCC_dy[j]*H+dH_dy[j]*CC;
    d_activity_dz[j]=dCC_dz[j]*H+dH_dz[j]*CC;
  }
+ activity_cum+=activity;
 }
 
 void Probe::kabsch()
@@ -343,7 +358,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   {
    wfile.open(filename.c_str());
    //wfile << "Step j j_index Soff_r" << endl;
-   wfile << "Step Dref mind CC D H Psi" << endl;
+   wfile << "Step Dref min_r mind CC D H Psi" << endl;
   }
   else
   {
@@ -356,7 +371,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << mind << " " << CC << " " << D << " " << H << " " << activity << " " << endl;
+  wfile << step << " " << r << " " << min_r << " " << mind << " " << CC << " " << D << " " << H << " " << activity << " " << endl;
   wfile.close();
 }
 
