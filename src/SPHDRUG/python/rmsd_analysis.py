@@ -106,7 +106,7 @@ if __name__=="__main__":
    rmsd=calc_rmsd(args.input_gro,args.input_traj,args.ref, align_set, rmsd_set)
    #print(rmsd)
    rmsd.to_pickle("rmsd.pkl")
-   traj=mdtraj.load(args.input_traj,top=args.input_gro)[0:10]
+   traj=mdtraj.load(args.input_traj,top=args.input_gro)
    pairwise_rmsd=calc_pairwise_rmsd(traj,align_set,rmsd_set)
    pickle.dump(pairwise_rmsd,open("pairwise.pkl","wb"))
    
