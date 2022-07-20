@@ -102,6 +102,7 @@ def laio(rmsd,rmsd_threshold):
     rhodelta["nnhd"]=[-1]*len(rmsd)
     rhodelta["delta"]=[0.]*len(rmsd)
     rhodelta["cluster"]=[-1]*len(rmsd)
+    rhodelta["cluster_centre"]=[-1]*len(rmsd)
     
     #Assign density
     for i in range(0,len(rhodelta)):
@@ -140,11 +141,11 @@ def laio(rmsd,rmsd_threshold):
         except:
             print("Looks like you didn't give me an integer. Try again\n")
 
-    #Assign cluster centers to cluster ids
+    #Assign cluster ids to cluster centres
     for i in range(0,len(cluster_centers)):
         point_i=cluster_centers[i]
         rhodelta.cluster[point_i]=i
-    
+        rhodelta.cluster_centre[point_i]=point_i
 
     #Assign rest of points to clusters
     rhodelta.sort_values("rho",ascending=False,inplace=True,ignore_index=True)
@@ -156,40 +157,28 @@ def laio(rmsd,rmsd_threshold):
         #return
         nnhd_j=np.where(rhodelta.point==nnhd)[0][0] #index of rhodelta.nnhd[i] in the sorted dataframe
         rhodelta.cluster[i]=rhodelta.cluster[nnhd_j]
-        print(nnhd,nnhd_j,rhodelta.cluster[nnhd_j])
+        rhodelta.cluster_centre[i]=rhodelta.cluster_centre[nnhd_j]
+        #print(nnhd,nnhd_j,rhodelta.cluster[nnhd_j])
     
     #pickle rhodelta
+    print(rhodelta)
     rhodelta.sort_values("point",inplace=True,ignore_index=True)
     rhodelta.to_pickle("rhodelta.pkl")
     return rhodelta
 
-
-def dirty_clustering(traj,align_set, rmsd_set, rmsd_threshold):
-    traj_align_idx=get_atomset_idx(traj,align_set)
-    traj_rmsd_idx=get_atomset_idx(traj,rmsd_set)
-    discarded=[]
-    kept=[]
-    for i in range(traj.n_frames):
-        if (i in discarded):
-            continue
-        print("Processing frame %i" % i)
-        frame_i=traj[i]
-        crd_i=frame_i.xyz[0][traj_rmsd_idx]
-        with pymp.Parallel() as p:
-           for j in p.range(i,traj.n_frames):
-               if (j in discarded):
-                   continue
-               frame_j=traj[j]
-               frame_j=frame_j.superpose(reference=frame_i,atom_indices=traj_align_idx)
-               crd_j=frame_j.xyz[0][traj_rmsd_idx]
-               rmsd=np.sqrt(((((crd_i-crd_j)**2))*3).mean())
-               #print(rmsd)
-               if rmsd<rmsd_threshold:
-                   discarded.append(j)
-        kept.append(i)
-    print(len(kept))
-    print(len(discarded))
-    return kept    
+def save_clusters(rhodelta,traj):
+    clusters={}
+    for i in range(0,len(rhodelta)):
+        if rhodelta.cluster_centre[i] not in clusters.keys():
+            clusters[rhodelta.cluster_centre[i]]=[rhodelta.point[i]]
+        else:
+            clusters[rhodelta.cluster_centre[i]].append(rhodelta.point[i])
+    
+    for key in clusters.keys():
+        name="cluster_"+str(key)
+        traj[key].save_gro(name+".gro")
+        trjslice=traj[clusters[key]]
+        trjslice.save_xtc(name+".xtc")
 
 if __name__=="__main__":
    
@@ -199,15 +188,11 @@ if __name__=="__main__":
    print ("The following atoms will be used for RMSD calculation")
    rmsd_set=get_atom_set(args.ref,args.rmsd,args.input_gro)
    traj=mdtraj.load(args.input_traj,top=args.input_gro,stride=args.stride)
-   #rmsd=calc_rmsd(traj,args.ref, align_set, rmsd_set)
-   #print(rmsd)
-   #rmsd.to_pickle("rmsd.pkl")
+   rmsd=calc_rmsd(traj,args.ref, align_set, rmsd_set)
+   rmsd.to_pickle("rmsd_ref.pkl")
    pairwise_rmsd=calc_pairwise_rmsd(traj,align_set,rmsd_set)
    rhodelta=laio(pairwise_rmsd,args.rmsd_threshold)
-   
-
-   #kept=dirty_clustering(traj,align_set,rmsd_set,args.rmsd_threshold)
-   #traj[kept].save_xtc("kept.xtc")
+   save_clusters(rhodelta,traj)
    
 
 
