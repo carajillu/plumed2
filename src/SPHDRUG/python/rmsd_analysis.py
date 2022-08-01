@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymp
 import pickle
+import os
 
 def parse():
     parser = argparse.ArgumentParser()
@@ -14,7 +15,8 @@ def parse():
     parser.add_argument('-r','--ref', nargs="+", help="reference structure(s) gro or pdb",default=["ref.pdb"])
     parser.add_argument('-a','--align', nargs="?", help="atoms you want to align to reference (VMD style selection)",default="backbone")
     parser.add_argument('-d','--rmsd', nargs="?", help="atoms you want to align to reference (VMD style selection)",default="backbone")
-    parser.add_argument('-u','--rmsd_threshold',nargs="?",help="rmsd threshold for clustering",type=float,default=0.1)
+    parser.add_argument('-rho','--rho',nargs="?",help="d0 value for laio clustering",type=float,default=0.1)
+    parser.add_argument('-delta','--delta',nargs="?",help="minimum delta value for a point to be considered a laio cluster center",type=float,default=0.1)
     parser.add_argument('-o','--output_csv', nargs="?", help="output csv file",default="rmsd.csv")
     args = parser.parse_args()
     return args
@@ -95,7 +97,7 @@ def calc_pairwise_rmsd(traj,align_set, rmsd_set):
     pickle.dump(rmsd,open("pairwise.pkl","wb"))
     return rmsd
 
-def laio(rmsd,rmsd_threshold):
+def laio(rmsd,rmsd_threshold,delta_min):
     rhodelta=pd.DataFrame()
     rhodelta["point"]=range(0,len(rmsd))
     rhodelta["rho"]=[0]*len(rmsd)
@@ -125,21 +127,21 @@ def laio(rmsd,rmsd_threshold):
         rhodelta.delta[i]=delta_i
     
     #choose cluster centers
-    print(rhodelta.sort_values("delta",ascending=False))
-    cluster_centers=[]
+    print(rhodelta.sort_values("delta",ascending=False)[1:50])
+    
     z="start"
-    while (z!=""):
-        z=input("Please indicate a point that will be a cluster centre. If non left, press enter:\n")
-        if z=="":
-            continue
+    while (type(z)!=float):
+        z=input("Please indicate the minimum delta for a point to be considered a cluster centre\n")
         try: 
-            c=int(z)
-            if c>len(rmsd)-1 or c<0:
-                print("This index doesn't correspond to a cluster centre. Try again.\n")
-                continue
-            cluster_centers.append(c)
+            z=float(z)
         except:
-            print("Looks like you didn't give me an integer. Try again\n")
+            print("Looks like you didn't give me a float. Try again\n")
+
+    cluster_centers=[]
+    for i in range(0,len(rhodelta)):
+        if rhodelta.delta[i]>=z:
+            cluster_centers.append(rhodelta.point[i])
+
 
     #Assign cluster ids to cluster centres
     for i in range(0,len(cluster_centers)):
@@ -190,8 +192,11 @@ if __name__=="__main__":
    traj=mdtraj.load(args.input_traj,top=args.input_gro,stride=args.stride)
    rmsd=calc_rmsd(traj,args.ref, align_set, rmsd_set)
    rmsd.to_pickle("rmsd_ref.pkl")
-   pairwise_rmsd=calc_pairwise_rmsd(traj,align_set,rmsd_set)
-   rhodelta=laio(pairwise_rmsd,args.rmsd_threshold)
+   if (os.path.isfile("pairwise.pkl")):
+      pairwise_rmsd=pickle.load(open("pairwise.pkl","rb"))
+   else: 
+      pairwise_rmsd=calc_pairwise_rmsd(traj,align_set,rmsd_set)
+   rhodelta=laio(pairwise_rmsd,args.rho,args.delta)
    save_clusters(rhodelta,traj)
    
 
