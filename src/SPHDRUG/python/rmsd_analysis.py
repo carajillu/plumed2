@@ -13,7 +13,7 @@ def parse():
     parser.add_argument('-i','--input_gro', nargs="?", help="system coordinates gro",default="system.gro")
     parser.add_argument('-t','--input_traj', nargs="+", help="trajectory file(s)",default=["traj.xtc"])
     parser.add_argument('-s','--stride', nargs="?", help="stride to load trajectory",default=1)
-    parser.add_argument('-r','--ref', nargs="+", help="reference structure(s) gro or pdb",default=["ref.pdb"])
+    parser.add_argument('-r','--rmsd', nargs="?", help="pkl file containing the rmsd matrix",default="pairwise.pkl")
     parser.add_argument('-a','--align', nargs="?", help="atoms you want to align to reference (VMD style selection)",default="backbone")
     parser.add_argument('-rho','--rho',nargs="?",help="d0 value for laio clustering",type=float,default=0.1)
     parser.add_argument('-delta','--delta',nargs="?",help="minimum delta value for a point to be considered a laio cluster center",type=float,default=None)
@@ -21,12 +21,13 @@ def parse():
     args = parser.parse_args()
     return args
 
-def calc_pairwise_rmsd(traj,align_set, rmsd_set):
+def calc_pairwise_rmsd(traj,align_set):
     traj_align_idx=traj.topology.select(align_set)
     rmsd=pymp.shared.array((traj.n_frames,traj.n_frames),dtype=np.float64)
     with pymp.Parallel(1) as p:
        for i in p.range(0,traj.n_frames):
            rmsd[i]=mdtraj.rmsd(traj,traj,frame=i,atom_indices=traj_align_idx)
+           print("Finished processing frame %i" % i)
     print("Max pairwise rmsd: ", np.max(rmsd))
     pickle.dump(rmsd,open("pairwise.pkl","wb"))
     return rmsd
@@ -126,10 +127,12 @@ if __name__=="__main__":
    print(args.align)
    
    traj=mdtraj.load(args.input_traj,top=args.input_gro,stride=args.stride)
-   if (os.path.isfile("pairwise.pkl")):
-      pairwise_rmsd=pickle.load(open("pairwise.pkl","rb"))
-   else: 
-      pairwise_rmsd=calc_pairwise_rmsd(traj,args.align)
+   try:
+     pairwise_rmsd=pickle.load(open(args.rmsd,"rb"))
+     print("Loaded file %s" % args.rmsd)
+   except:
+     print("File %s could not be opened, will calculate pairwise RMSD" % args.rmsd) 
+     pairwise_rmsd=calc_pairwise_rmsd(traj,args.align)
    rhodelta=laio(pairwise_rmsd,args.rho,args.delta)
    save_clusters(rhodelta,traj)
    
