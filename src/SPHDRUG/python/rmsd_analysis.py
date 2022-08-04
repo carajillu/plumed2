@@ -6,6 +6,7 @@ import numpy as np
 import pymp
 import pickle
 import os
+import sys
 
 def parse():
     parser = argparse.ArgumentParser()
@@ -14,85 +15,18 @@ def parse():
     parser.add_argument('-s','--stride', nargs="?", help="stride to load trajectory",default=1)
     parser.add_argument('-r','--ref', nargs="+", help="reference structure(s) gro or pdb",default=["ref.pdb"])
     parser.add_argument('-a','--align', nargs="?", help="atoms you want to align to reference (VMD style selection)",default="backbone")
-    parser.add_argument('-d','--rmsd', nargs="?", help="atoms you want to align to reference (VMD style selection)",default="backbone")
     parser.add_argument('-rho','--rho',nargs="?",help="d0 value for laio clustering",type=float,default=0.1)
-    parser.add_argument('-delta','--delta',nargs="?",help="minimum delta value for a point to be considered a laio cluster center",type=float,default=0.1)
+    parser.add_argument('-delta','--delta',nargs="?",help="minimum delta value for a point to be considered a laio cluster center",type=float,default=None)
     parser.add_argument('-o','--output_csv', nargs="?", help="output csv file",default="rmsd.csv")
     args = parser.parse_args()
     return args
 
-def get_atom_set(ref,selection,input_gro):
-   #Get atoms from references (make sure they are the same)
-   atoms_refs=[]
-   for reference_pdb in ref:
-      ref_i=mdtraj.load(reference_pdb)
-      sel=ref_i.topology.select(selection)
-      atoms=[]
-      for atom_id in sel:
-          atoms.append(str(ref_i.topology.atom(atom_id)))
-      atoms_refs.append(atoms)
-
-   #Get atoms from trajectory   
-   traj=mdtraj.load(input_gro)
-   sel=traj.topology.select(selection)
-   atoms=[]
-   for atom_id in sel:
-          atoms.append(str(traj.topology.atom(atom_id)))      
-   atoms_refs.append(atoms)
-
-   align_set=set(atoms_refs[0])
-   for s in atoms_refs[1:]:
-       align_set.intersection_update(s)
-   print(align_set)    
-   return align_set
-
-def get_atomset_idx(traj,atomset):
-    idx_set=[]
-    for atom in traj.topology.atoms:
-        if str(atom) in atomset:
-            idx_set.append(atom.index)
-    return idx_set
-
-def calc_rmsd(traj,ref, align_set, rmsd_set):
-    traj_align_idx=get_atomset_idx(traj,align_set)
-    traj_rmsd_idx=get_atomset_idx(traj,rmsd_set)
-    rmsd=pd.DataFrame()
-    for reference_pdb in ref:
-        ref_i=mdtraj.load(reference_pdb)
-        ref_align_idx=get_atomset_idx(ref_i,align_set)
-        ref_rmsd_idx=get_atomset_idx(ref_i,rmsd_set)
-        traj=traj.superpose(reference=ref_i,atom_indices=traj_align_idx,ref_atom_indices=ref_align_idx)
-        #RMSD without superposition
-        crd_ref=ref_i.xyz[0][ref_rmsd_idx]
-        rms_ref=[]
-        for frame in traj.xyz:
-            crd_trj=frame[traj_rmsd_idx]
-            rms=np.sqrt(((((crd_trj-crd_ref)**2))*3).mean())
-            rms_ref.append(rms)
-            #print(rms)
-        rmsd[reference_pdb]=rms_ref
-        #rmsd[reference_pdb]=mdtraj.rmsd(traj,ref_i,atom_indices=traj_rmsd_idx,ref_atom_indices=ref_rmsd_idx)
-    return rmsd
-
 def calc_pairwise_rmsd(traj,align_set, rmsd_set):
-    traj_align_idx=get_atomset_idx(traj,align_set)
-    traj_rmsd_idx=get_atomset_idx(traj,rmsd_set)
-    #traj=traj.superpose(reference=traj[0],atom_indices=traj_align_idx)
+    traj_align_idx=traj.topology.select(align_set)
     rmsd=pymp.shared.array((traj.n_frames,traj.n_frames),dtype=np.float64)
-    with pymp.Parallel() as p:
-       rmsd_i=np.zeros((traj.n_frames,traj.n_frames),dtype=np.float64)
+    with pymp.Parallel(1) as p:
        for i in p.range(0,traj.n_frames):
-           frame_i=traj[i]
-           crd_i=frame_i.xyz[0][traj_rmsd_idx]
-           for j in range(i,traj.n_frames):
-               frame_j=traj[j]
-               frame_j=frame_j.superpose(reference=frame_i,atom_indices=traj_align_idx)
-               crd_j=frame_j.xyz[0][traj_rmsd_idx]
-               rmsd_i[i][j]=np.sqrt(((((crd_i-crd_j)**2))*3).mean())
-               rmsd_i[j][i]=rmsd_i[i][j]
-           print("Finished processing frame %i" % i)
-       with p.lock: 
-           rmsd+=rmsd_i
+           rmsd[i]=mdtraj.rmsd(traj,traj,frame=i,atom_indices=traj_align_idx)
     print("Max pairwise rmsd: ", np.max(rmsd))
     pickle.dump(rmsd,open("pairwise.pkl","wb"))
     return rmsd
@@ -127,15 +61,18 @@ def laio(rmsd,rmsd_threshold,delta_min):
         rhodelta.delta[i]=delta_i
     
     #choose cluster centers
-    print(rhodelta.sort_values("delta",ascending=False)[1:50])
+    print(rhodelta.sort_values("delta",ascending=False)[0:50])
     
-    z="start"
-    while (type(z)!=float):
-        z=input("Please indicate the minimum delta for a point to be considered a cluster centre\n")
-        try: 
-            z=float(z)
-        except:
-            print("Looks like you didn't give me a float. Try again\n")
+    if delta_min is None:
+       z="start"
+       while (type(z)!=float):
+           z=input("Please indicate the minimum delta for a point to be considered a cluster centre\n")
+           try: 
+               z=float(z)
+           except:
+               print("Looks like you didn't give me a float. Try again\n")
+    else:
+        z=delta_min
 
     cluster_centers=[]
     for i in range(0,len(rhodelta)):
@@ -185,17 +122,14 @@ def save_clusters(rhodelta,traj):
 if __name__=="__main__":
    
    args=parse()
-   print ("The following atoms will be used for alignment")
-   align_set=get_atom_set(args.ref,args.align,args.input_gro)
-   print ("The following atoms will be used for RMSD calculation")
-   rmsd_set=get_atom_set(args.ref,args.rmsd,args.input_gro)
+   print("The atom selection for alignment is:")
+   print(args.align)
+   
    traj=mdtraj.load(args.input_traj,top=args.input_gro,stride=args.stride)
-   rmsd=calc_rmsd(traj,args.ref, align_set, rmsd_set)
-   rmsd.to_pickle("rmsd_ref.pkl")
    if (os.path.isfile("pairwise.pkl")):
       pairwise_rmsd=pickle.load(open("pairwise.pkl","rb"))
    else: 
-      pairwise_rmsd=calc_pairwise_rmsd(traj,align_set,rmsd_set)
+      pairwise_rmsd=calc_pairwise_rmsd(traj,args.align)
    rhodelta=laio(pairwise_rmsd,args.rho,args.delta)
    save_clusters(rhodelta,traj)
    
