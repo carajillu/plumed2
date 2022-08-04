@@ -19,10 +19,12 @@ def parse():
 
 def find_atomid_pair(traj,atomstring_pair):
     atomid_pair=[]
+    atomstring_pair=atomstring_pair.split(",")
     for i in range(traj.n_atoms):
         if str(traj.topology.atom(i)) in atomstring_pair:
             atomid_pair.append(i)
     if len(atomid_pair)!=2:
+        print(atomid_pair)
         sys.exit("There is something wrong with your selection")
     return atomid_pair
 

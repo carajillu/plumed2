@@ -354,15 +354,10 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   //filename.append(to_string(step));
   filename.append("-stats.csv");
   ofstream wfile;
+  wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile.open(filename.c_str());
-   //wfile << "Step j j_index Soff_r" << endl;
    wfile << "Step Dref min_r mind CC D H Psi" << endl;
-  }
-  else
-  {
-   wfile.open(filename.c_str(),std::ios_base::app);
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -381,14 +376,7 @@ void Probe::print_probe_xyz(int id, int step)
  filename.append(to_string(id));
  filename.append(".xyz");
  ofstream wfile;
- if (step==0)
- {
-  wfile.open(filename.c_str());
- }
- else
- {
-  wfile.open(filename.c_str(),std::ios_base::app);
- }
+ wfile.open(filename.c_str(),std::ios_base::app);
  wfile << 1 << endl;
  wfile << "Probe  "<< to_string(id) << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;
