@@ -65,6 +65,11 @@ if __name__=="__main__":
     subset=traj_obj.atom_slice(atomlist)
     subset.xyz=xyz_prot
 
+    #Print trajectory without probes (for fpocket)
+    subset=subset.superpose(reference=subset[0],atom_indices=subset.topology.select("backbone"))
+    subset[0].save_pdb(args.output+"_protein.pdb")
+    subset[0].save_xtc(args.output+"_protein.xtc")
+
     #process probes
     probes_trj=[]
     for probefile in args.probe:
@@ -75,7 +80,7 @@ if __name__=="__main__":
     
     #join protein and probes in traj
     newtraj=stack_traj(subset,probes_trj)
-
+    newtraj=newtraj.superpose(reference=newtraj[0],atom_indices=newtraj.topology.select("backbone"))
     #export
     newtraj[0].save_gro(args.output+".gro")
     newtraj.save_xtc(args.output+".xtc")
