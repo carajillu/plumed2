@@ -68,7 +68,7 @@ if __name__=="__main__":
     #Print trajectory without probes (for fpocket)
     subset=subset.superpose(reference=subset[0],atom_indices=subset.topology.select("backbone"))
     subset[0].save_pdb(args.output+"_protein.pdb")
-    subset[0].save_xtc(args.output+"_protein.xtc")
+    subset.save_xtc(args.output+"_protein.xtc")
 
     #process probes
     probes_trj=[]
