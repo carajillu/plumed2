@@ -6,7 +6,7 @@ def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format",default="traj.gro")
     parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
-    parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default="protein.xyz")
+    parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default=None)
     parser.add_argument('-p','--probe', nargs="+", help="probe file issued by plumed",default=[])
     parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein")
     parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMS style selection)",default="all")
@@ -62,7 +62,7 @@ if __name__=="__main__":
     #process protein
     print("processing file "+args.input_gro)
     traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)
-    if (args.xyz is not None):
+    if (args.input_xyz is not None):
        atomlist, xyz_prot=process_xyz(args.input_xyz)
        subset=traj_obj.atom_slice(atomlist)
        subset.xyz=xyz_prot
