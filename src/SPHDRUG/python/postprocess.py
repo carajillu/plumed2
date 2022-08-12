@@ -7,8 +7,9 @@ def parse():
     parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format",default="traj.gro")
     parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default="protein.xyz")
-    parser.add_argument('-p','--probe', nargs="+", help="probe file issued by plumed",default=["probe-0.xyz"])
+    parser.add_argument('-p','--probe', nargs="+", help="probe file issued by plumed",default=[])
     parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein")
+    parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMS style selection)",default="all")
 
     args = parser.parse_args()
     return args
@@ -61,9 +62,14 @@ if __name__=="__main__":
     #process protein
     print("processing file "+args.input_gro)
     traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)
-    atomlist, xyz_prot=process_xyz(args.input_xyz)
-    subset=traj_obj.atom_slice(atomlist)
-    subset.xyz=xyz_prot
+    if (args.xyz is not None):
+       atomlist, xyz_prot=process_xyz(args.input_xyz)
+       subset=traj_obj.atom_slice(atomlist)
+       subset.xyz=xyz_prot
+    else:
+        atomlist=traj_obj.topology.select(args.subset)
+        subset=subset=traj_obj.atom_slice(atomlist)
+    
 
     #Print trajectory without probes (for fpocket)
     subset=subset.superpose(reference=subset[0],atom_indices=subset.topology.select("backbone"))
@@ -72,11 +78,12 @@ if __name__=="__main__":
 
     #process probes
     probes_trj=[]
-    for probefile in args.probe:
-        print("reading file "+probefile)
-        probeatomlist, xyz_probe=process_xyz(probefile)
-        trj=mktraj(xyz_probe,args.probe.index(probefile))
-        probes_trj.append(trj)
+    if len(args.probe)>0:
+        for probefile in args.probe:
+            print("reading file "+probefile)
+            probeatomlist, xyz_probe=process_xyz(probefile)
+            trj=mktraj(xyz_probe,args.probe.index(probefile))
+            probes_trj.append(trj)
     
     #join protein and probes in traj
     newtraj=stack_traj(subset,probes_trj)
