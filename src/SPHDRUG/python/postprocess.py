@@ -7,7 +7,7 @@ def parse():
     parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format",default="traj.gro")
     parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default=None)
-    parser.add_argument('-p','--probe', nargs="+", help="probe file issued by plumed",default=[])
+    parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes",default=1)
     parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein")
     parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMS style selection)",default="all")
 
@@ -69,20 +69,15 @@ if __name__=="__main__":
     else:
         atomlist=traj_obj.topology.select(args.subset)
         subset=subset=traj_obj.atom_slice(atomlist)
-    
-
-    #Print trajectory without probes (for fpocket)
-    subset=subset.superpose(reference=subset[0],atom_indices=subset.topology.select("backbone"))
-    subset[0].save_pdb(args.output+"_protein.pdb")
-    subset.save_xtc(args.output+"_protein.xtc")
 
     #process probes
     probes_trj=[]
-    if len(args.probe)>0:
-        for probefile in args.probe:
+    if args.nprobes>0:
+        for i in range(args.nprobes):
+            probefile="probe-"+str(i)+".xyz"
             print("reading file "+probefile)
             probeatomlist, xyz_probe=process_xyz(probefile)
-            trj=mktraj(xyz_probe,args.probe.index(probefile))
+            trj=mktraj(xyz_probe,i)
             probes_trj.append(trj)
     
     #join protein and probes in traj
