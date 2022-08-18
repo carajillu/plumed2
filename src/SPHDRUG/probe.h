@@ -96,7 +96,7 @@ class Probe
     Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe(double kpert, unsigned step);
+    void perturb_probe(double kpert);
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);

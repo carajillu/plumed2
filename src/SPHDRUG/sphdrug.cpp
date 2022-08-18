@@ -555,21 +555,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           double y = getPosition(init_j[i])[1];
           double z = getPosition(init_j[i])[2];
           probes[i].place_probe(x, y, z);
+          probes[i].perturb_probe(kpert);
         }
         // Update probe coordinates
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
-        }
-        
-        if (step%pertstride==0)
-        {
-          if (step==0 or probes[i].activity_cum<probes[i].activity_old)
-          {
-           probes[i].perturb_probe(kpert,step);
-          }
-          probes[i].activity_old=probes[i].activity_cum;
-          probes[i].activity_cum=0;
         }
 
         if (!nocvcalc)
@@ -582,6 +573,16 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             d_Sphdrug_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
             d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
+        }
+
+        if (step%pertstride==0)
+        {
+          if (probes[i].activity_cum<probes[i].activity_old)
+          {
+           probes[i].perturb_probe(kpert);
+          }
+          probes[i].activity_old=probes[i].activity_cum;
+          probes[i].activity_cum=0;
         }
       }
 
@@ -603,7 +604,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
          for (unsigned i=0; i<nprobes;i++)
          {
           // Get coordinates of the reference atom (change to target at some point?)
-          int j = n_atoms + i;
+          unsigned j = init_j[i];
+
           double ref_x = getPosition(j)[0];
           double ref_y = getPosition(j)[1];
           double ref_z = getPosition(j)[2];

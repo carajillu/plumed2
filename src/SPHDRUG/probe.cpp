@@ -92,7 +92,7 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-void Probe::perturb_probe(double kpert, unsigned step)
+void Probe::perturb_probe(double kpert)
 {
   random_device rd;  // only used once to initialise (seed) engine
   mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
@@ -134,19 +134,6 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
     min_r=r[j];
     j_min_r=j;
    }
- }
-
- /*
- If the probe gets too far from the protein
- bring it back to the closest atom and apply
- a small perturbation 
- */
- if (min_r>CCmax)
- {
-  xyz[0]=atoms_x[j_min_r];
-  xyz[1]=atoms_y[j_min_r];
-  xyz[2]=atoms_z[j_min_r];
-  perturb_probe(0,0);
  }
 }
 
