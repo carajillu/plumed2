@@ -20,6 +20,7 @@ class Probe
   double Dmin; // packing factor below which depth term equals 0
   double deltaD; // interval over which depth term turns from 0 to 1
   double Kpert;
+  double theta;
   
   //stuff
 
@@ -54,7 +55,9 @@ class Probe
   vector<double> dmind_dx;
   vector<double> dmind_dy;
   vector<double> dmind_dz;
+  vector<double> exp_theta_r;
   void calculate_mind();
+  void calculate_mind_exp();
 
   double CC;
   double dCC_dr;
@@ -99,7 +102,7 @@ class Probe
   void calc_pert();
 
  public:
-    Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms, double kpert);
+    Probe(double Mind_slope, double Mind_intercept, double Theta, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);

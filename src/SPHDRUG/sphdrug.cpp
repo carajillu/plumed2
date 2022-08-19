@@ -68,6 +68,7 @@ namespace PLMD
       // Parameters
       double mind_slope=0;     // slope of the mind linear implementation
       double mind_intercept=0; // intercept of the mind linear implementation
+      double theta=0;
       double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
       double CCmax=0;          // distance above which an atom is considered to be too far away from the probe*
       double deltaCC=0;        // interval over which contact terms are turned on and off
@@ -150,6 +151,7 @@ namespace PLMD
       keys.add("optional", "DELTACC", "");
       keys.add("optional", "MINDSLOPE", "");
       keys.add("optional", "MINDINTERCEPT", "");
+      keys.add("optional", "THETA", "");
       keys.add("optional", "DMIN", "");
       keys.add("optional", "DELTAD", "");
       keys.add("optional", "KPERT", "");
@@ -259,6 +261,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         deltaCC = 0.15;
       cout << "deltaCC = " << deltaCC << " nm" << endl;
 
+      parse("THETA", theta);
+      if (!theta)
+        theta = 50; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "THETA = " << theta << endl;
+
       parse("MINDSLOPE", mind_slope);
       if (!mind_slope)
         mind_slope = 1; // obtained from generating 10000 random points in VHL's crystal structure
@@ -296,7 +303,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms, kpert));
+        probes.push_back(Probe(mind_slope, mind_intercept, theta, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms, kpert));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
@@ -555,8 +562,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           double y = getPosition(init_j[i])[1];
           double z = getPosition(init_j[i])[2];
           probes[i].place_probe(x, y, z);
-          cout << "perturbing probe at step 0" << endl;
-          probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+          if (!nodxfix)  
+              probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+          else
+              probes[i].place_probe(x+0.1, y+0.1, z+0.1);
         }
 
         // Update probe coordinates
@@ -577,7 +586,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           }
         }
 
-        if (step%pertstride==0 and step>0)
+        if (step%pertstride==0 and step>0 and (!nodxfix))
            probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
       }
 

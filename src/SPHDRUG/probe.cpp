@@ -18,7 +18,7 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms, double kpert)
+Probe::Probe(double Mind_slope, double Mind_intercept, double Theta, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms, double kpert)
 {
   n_atoms=N_atoms;
   mind_slope=Mind_slope; //slope of the mind linear implementation
@@ -29,6 +29,7 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
   Dmin=DMin; // packing factor below which depth term equals 0
   deltaD=DeltaD; // interval over which depth term turns from 0 to 1
   Kpert=kpert;
+  theta=Theta;
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -56,6 +57,7 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
 
+  exp_theta_r=vector<double>(n_atoms,0);
   dmind_dx=vector<double>(n_atoms,0);
   dmind_dy=vector<double>(n_atoms,0);
   dmind_dz=vector<double>(n_atoms,0);
@@ -237,6 +239,38 @@ void Probe::calculate_mind()
  */
 }
 
+void Probe::calculate_mind_exp()
+{
+ double theta=5;
+ double sum_exp=0;
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  //if an atom is overlapping the probe, sum_exp would equal zero and then mind is not defined
+  // This will normally not happen but we want a safeguard
+  if (r[j]<0.0001)
+  {
+    mind=0;
+    for (unsigned j=0; j<n_atoms;j++)
+    {
+      dmind_dx[j]=0;
+      dmind_dy[j]=0;
+      dmind_dz[j]=0;
+    }
+    return;
+  }
+  exp_theta_r[j]=exp(theta/r[j]);
+  sum_exp+=exp_theta_r[j];
+ }
+ mind=theta/(log(sum_exp));
+
+ for (unsigned j=0; j<n_atoms;j++)
+ {
+  dmind_dx[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dx[j];
+  dmind_dy[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dy[j];
+  dmind_dz[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dz[j];
+ }
+}
+
 void Probe::calculate_CC()
 {
  double m=mind/CCmin;
@@ -281,7 +315,7 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  calculate_r(atoms_x,atoms_y,atoms_z);
  calculate_Soff_r();
  calculate_Son_r();
- calculate_mind();
+ calculate_mind_exp();
  calculate_CC();
  calculate_D();
  calculate_H();
