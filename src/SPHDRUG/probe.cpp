@@ -315,7 +315,7 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  calculate_r(atoms_x,atoms_y,atoms_z);
  calculate_Soff_r();
  calculate_Son_r();
- calculate_mind_exp();
+ calculate_mind();
  calculate_CC();
  calculate_D();
  calculate_H();
