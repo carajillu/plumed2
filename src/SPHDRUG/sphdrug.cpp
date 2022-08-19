@@ -296,7 +296,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms));
+        probes.push_back(Probe(mind_slope, mind_intercept, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms, kpert));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
@@ -555,8 +555,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           double y = getPosition(init_j[i])[1];
           double z = getPosition(init_j[i])[2];
           probes[i].place_probe(x, y, z);
-          probes[i].perturb_probe(kpert);
+          cout << "perturbing probe at step 0" << endl;
+          probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
         }
+
         // Update probe coordinates
         if (!noupdate)
         {
@@ -575,15 +577,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           }
         }
 
-        if (step%pertstride==0)
-        {
-          if (probes[i].activity_cum<probes[i].activity_old)
-          {
-           probes[i].perturb_probe(kpert);
-          }
-          probes[i].activity_old=probes[i].activity_cum;
-          probes[i].activity_cum=0;
-        }
+        if (step%pertstride==0 and step>0)
+           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
       }
 
       if (!nodxfix)

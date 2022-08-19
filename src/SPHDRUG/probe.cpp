@@ -18,7 +18,7 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms)
+Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms, double kpert)
 {
   n_atoms=N_atoms;
   mind_slope=Mind_slope; //slope of the mind linear implementation
@@ -28,6 +28,7 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
   deltaCC=DeltaCC; // interval over which contact terms are turned on and off
   Dmin=DMin; // packing factor below which depth term equals 0
   deltaD=DeltaD; // interval over which depth term turns from 0 to 1
+  Kpert=kpert;
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -50,6 +51,7 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMa
 
   xyz=vector<double>(3,0);
   xyz_pert=vector<double>(3,0);
+  xyz0=vector<double>(3,0);
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
@@ -92,7 +94,7 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-void Probe::perturb_probe(double kpert)
+void Probe::calc_pert()
 {
   random_device rd;  // only used once to initialise (seed) engine
   mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
@@ -104,12 +106,47 @@ void Probe::perturb_probe(double kpert)
    xyz_pert[i]=random_double;
   }
   double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
-  double k=kpert/norm;
-  xyz[0]+=xyz_pert[0]*k;
-  xyz[1]+=xyz_pert[1]*k;
-  xyz[2]+=xyz_pert[2]*k;
+  double k=Kpert/norm;
 
-  //cout << "Step " << step <<": displacing probe by vector " << xyz_pert[0]*k << " " << xyz_pert[1]*k << " " << xyz_pert[2]*k << endl;
+  xyz_pert[0]*=k;
+  xyz_pert[1]*=k;
+  xyz_pert[2]*=k;
+  xyz[0]+=xyz_pert[0];
+  xyz[1]+=xyz_pert[1];
+  xyz[2]+=xyz_pert[2];
+}
+
+void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
+{
+  //if no perturbation is needed, just update data and leave
+  if ((activity_cum >= activity_old) and step>0)
+  {
+   activity_old=activity_cum;
+   activity_cum=0;
+   ptries=0;
+   return;
+  }
+
+  xyz0=xyz;
+  D=0;
+  ptries=0;
+  while (D<Dmin)
+  {
+    xyz=xyz0;
+    calc_pert();
+    calculate_r(atoms_x,atoms_y,atoms_z);
+    calculate_Son_r();
+    calculate_Soff_r();
+    calculate_D();
+    ptries++;
+    if (ptries > 10000) 
+    {
+      cout << "Probe could not be settled after 10000 perturbation trials. Exiting." << endl;
+      exit(0);
+    }
+    activity_old=activity_cum;
+    activity_cum=0;
+  }    
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -344,7 +381,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step Dref min_r mind CC D H Psi" << endl;
+   wfile << "Step Dref min_r mind CC D H Psi Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -353,7 +390,8 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << min_r << " " << mind << " " << CC << " " << D << " " << H << " " << activity << " " << endl;
+  wfile << step << " " << r << " " << min_r << " " << mind << " " << CC << " " << D << " " << H << " " 
+        << activity << " " << ptries << endl;
   wfile.close();
 }
 

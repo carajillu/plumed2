@@ -19,6 +19,7 @@ class Probe
   double deltaCC; // interval over which contact terms are turned on and off
   double Dmin; // packing factor below which depth term equals 0
   double deltaD; // interval over which depth term turns from 0 to 1
+  double Kpert;
   
   //stuff
 
@@ -76,7 +77,6 @@ class Probe
 
   //coordinates
   vector<double> xyz;
-  vector<double> xyz_pert;
   vector<double> centroid;
   vector<double> centroid0;
 
@@ -92,11 +92,17 @@ class Probe
   arma::mat R; //rotation matrix
   void kabsch();
 
+  // for probe perturbation
+  vector<double> xyz_pert;
+  vector<double> xyz0;
+  unsigned ptries;
+  void calc_pert();
+
  public:
-    Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms);
+    Probe(double Mind_slope, double Mind_intercept, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe(double kpert);
+    void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
@@ -104,6 +110,12 @@ class Probe
     double activity;
     double activity_cum; // cummulative activity over PERTSTRIDE steps
     double activity_old; // cummulative activity over the last period 
+    double Dcum; //cumulative depth over PERTSTRIDE steps
+    double Dold; //cummulative depth over the last period
+    double pert_accepted;
+    double pert_rejected;
+    double pert_acceptance;
+    string accepted;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;

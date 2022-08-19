@@ -14,6 +14,7 @@ def parse():
     parser.add_argument('-i','--input', type=str,nargs="?",  help="Protein structure in gro or pdb format",default="system.pdb")
     parser.add_argument('-c','--ccmax', type=float, nargs="+",help="Parameter CCmax to calculate correlation for",default=0.45)
     parser.add_argument('-d','--deltacc', type=float, nargs="+", help="Parameter deltaCC to calculate correlation for",default=0.05)
+    parser.add_argument('-m','--ccmin', type=float, nargs="?", help="Parameter CCmin below which data isn't relevant",default=0.15)
     parser.add_argument('-o','--output', type=str, nargs="?", help="Output CSV file",default="correlation.csv")
 
     args = parser.parse_args()
@@ -51,7 +52,7 @@ def gen_points(system):
             z[1]=atom[2]
 
     points=[]
-    for i in range(0,10000):
+    for i in range(0,1000):
         x1=random.uniform(x[0],x[1])
         y2=random.uniform(y[0],y[1])
         z3=random.uniform(z[0],z[1])
@@ -110,11 +111,11 @@ def gen_mind_c_lst(points,system,k,v0,deltaV):
     print("mind_c_lst has ", len(mind_c_lst), " elements")
     return mind_c_lst
 
-def get_correlation_uncorrected(mind_r_lst,mind_c_lst):
+def get_correlation_uncorrected(mind_r_lst,mind_c_lst,ccmin):
     mind_r_noinf=[]
     mind_c_noinf=[]
     for i in range(0,len(mind_c_lst)):
-        if mind_c_lst[i]==math.inf:
+        if mind_c_lst[i]==math.inf or mind_r_lst[i]<ccmin:
             continue
         mind_r_noinf.append(mind_r_lst[i])
         mind_c_noinf.append(mind_c_lst[i])
@@ -164,7 +165,7 @@ if __name__=="__main__":
     for CCmax in ccmax:
         for deltaCC in deltacc:
             mind_c_lst=gen_mind_c_lst(points,system,k,CCmax,deltaCC)
-            mind_r_noinf_lst,mind_c_noinf_lst,slope, intercept, r_value, p_value, std_err=get_correlation_uncorrected(mind_r_lst,mind_c_lst)
+            mind_r_noinf_lst,mind_c_noinf_lst,slope, intercept, r_value, p_value, std_err=get_correlation_uncorrected(mind_r_lst,mind_c_lst,args.ccmin)
             mind_corr_lst=get_correlation_corrected(mind_r_noinf_lst,mind_c_noinf_lst,slope, intercept)
             info_frame.append([CCmax,deltaCC,slope,intercept,r_value**2])
     
