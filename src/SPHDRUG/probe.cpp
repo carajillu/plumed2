@@ -18,18 +18,15 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(double Mind_slope, double Mind_intercept, double Theta, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned N_atoms, double kpert)
+Probe::Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, unsigned N_atoms, double kpert)
 {
   n_atoms=N_atoms;
-  mind_slope=Mind_slope; //slope of the mind linear implementation
-  mind_intercept=Mind_intercept; //intercept of the mind linear implementation
   CCmin=CCMin; // mind below which an atom is considered to be clashing with the probe 
   CCmax=CCMax; // distance above which an atom is considered to be too far away from the probe*
   deltaCC=DeltaCC; // interval over which contact terms are turned on and off
-  Dmin=DMin; // packing factor below which depth term equals 0
-  deltaD=DeltaD; // interval over which depth term turns from 0 to 1
+  Phimin=phimin; // packing factor below which depth term equals 0
+  deltaPhi=deltaphi; // interval over which depth term turns from 0 to 1
   Kpert=kpert;
-  theta=Theta;
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -50,29 +47,18 @@ Probe::Probe(double Mind_slope, double Mind_intercept, double Theta, double CCMi
   dSon_r_dy=vector<double>(n_atoms,0);
   dSon_r_dz=vector<double>(n_atoms,0);
 
+  Phi=0;
+  dPhi_dx=vector<double>(n_atoms,0);
+  dPhi_dy=vector<double>(n_atoms,0);
+  dPhi_dz=vector<double>(n_atoms,0);
+
   xyz=vector<double>(3,0);
   xyz_pert=vector<double>(3,0);
   xyz0=vector<double>(3,0);
+  ptries=0;
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
-
-  exp_theta_r=vector<double>(n_atoms,0);
-  dmind_dx=vector<double>(n_atoms,0);
-  dmind_dy=vector<double>(n_atoms,0);
-  dmind_dz=vector<double>(n_atoms,0);
-
-  dCC_dx=vector<double>(n_atoms,0);
-  dCC_dy=vector<double>(n_atoms,0);
-  dCC_dz=vector<double>(n_atoms,0);
-
-  dD_dx=vector<double>(n_atoms,0);
-  dD_dy=vector<double>(n_atoms,0);
-  dD_dz=vector<double>(n_atoms,0);
-
-  dH_dx=vector<double>(n_atoms,0);
-  dH_dy=vector<double>(n_atoms,0);
-  dH_dz=vector<double>(n_atoms,0);
 
   d_activity_dx=vector<double>(n_atoms,0);
   d_activity_dy=vector<double>(n_atoms,0);
@@ -128,18 +114,14 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
    ptries=0;
    return;
   }
-
   xyz0=xyz;
-  D=0;
   ptries=0;
-  while (D<Dmin)
+  activity=0;
+  while (activity<0.00001)
   {
     xyz=xyz0;
     calc_pert();
-    calculate_r(atoms_x,atoms_y,atoms_z);
-    calculate_Son_r();
-    calculate_Soff_r();
-    calculate_D();
+    calculate_activity(atoms_x,atoms_y,atoms_z);
     ptries++;
     if (ptries > 10000) 
     {
@@ -179,14 +161,20 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
 //Calculate Soff_r and all their derivatives
 void Probe::calculate_Soff_r()
 {
- total_Soff=0;
  for (unsigned j=0; j<n_atoms; j++)
  {
+  if (r[j] >= (CCmax+deltaCC))
+  {
+   Soff_r[j]=0;
+   dSoff_r_dx[j]=0;
+   dSoff_r_dy[j]=0;
+   dSoff_r_dz[j]=0;
+   continue;
+  }
   double m_r=COREFUNCTIONS::m_v(r[j],CCmax,deltaCC);
   double dm_dr=COREFUNCTIONS::dm_dv(deltaCC);
 
   Soff_r[j]=COREFUNCTIONS::Soff_m(m_r,1);
-  total_Soff+=Soff_r[j];
   dSoff_r_dx[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dx[j];
   dSoff_r_dy[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dy[j];
   dSoff_r_dz[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dz[j];
@@ -197,7 +185,15 @@ void Probe::calculate_Son_r()
 {
  for (unsigned j=0; j<n_atoms; j++)
  {
-  double m_r=COREFUNCTIONS::m_v(r[j],0,CCmin);
+  if (r[j] <= CCmin)
+  {
+   Son_r[j]=0;
+   dSon_r_dx[j]=0;
+   dSon_r_dy[j]=0;
+   dSon_r_dz[j]=0;
+   continue;
+  }
+  double m_r=COREFUNCTIONS::m_v(r[j],CCmin,deltaCC);
   double dm_dr=COREFUNCTIONS::dm_dv(CCmin);
 
   Son_r[j]=COREFUNCTIONS::Son_m(m_r,1);
@@ -207,106 +203,15 @@ void Probe::calculate_Son_r()
  }
 }
 
-void Probe::calculate_mind()
+void Probe::calculate_Phi()
 {
- double sum_prod=0;
- for (unsigned j=0;j<n_atoms;j++)
- {
-   sum_prod+=Soff_r[j]*r[j];
- }
- if (total_Soff<zero_tol) //avoid 0/0 error
- {
-   mind=0;
- }
- else
- {
-   mind=mind_slope*(sum_prod/total_Soff)+mind_intercept; 
-   for (unsigned j=0;j<r.size();j++)
-   {
-     dmind_dx[j]=mind_slope*(((dSoff_r_dx[j]*r[j]+dr_dx[j]*Soff_r[j])*total_Soff)-(dSoff_r_dx[j]*sum_prod))/pow(total_Soff,2);
-     dmind_dy[j]=mind_slope*(((dSoff_r_dy[j]*r[j]+dr_dy[j]*Soff_r[j])*total_Soff)-(dSoff_r_dy[j]*sum_prod))/pow(total_Soff,2);
-     dmind_dz[j]=mind_slope*(((dSoff_r_dz[j]*r[j]+dr_dz[j]*Soff_r[j])*total_Soff)-(dSoff_r_dz[j]*sum_prod))/pow(total_Soff,2);
-   }
- }
-
- //mind_check
- /*
- double mind_real=INFINITY;
- for (unsigned j=0;j<n_atoms;j++)
- {
-  if (r[j]<mind_real) mind_real=r[j];
- }
- */
-}
-
-void Probe::calculate_mind_exp()
-{
- double theta=5;
- double sum_exp=0;
+ Phi=0;
  for (unsigned j=0; j<n_atoms; j++)
  {
-  //if an atom is overlapping the probe, sum_exp would equal zero and then mind is not defined
-  // This will normally not happen but we want a safeguard
-  if (r[j]<0.0001)
-  {
-    mind=0;
-    for (unsigned j=0; j<n_atoms;j++)
-    {
-      dmind_dx[j]=0;
-      dmind_dy[j]=0;
-      dmind_dz[j]=0;
-    }
-    return;
-  }
-  exp_theta_r[j]=exp(theta/r[j]);
-  sum_exp+=exp_theta_r[j];
- }
- mind=theta/(log(sum_exp));
-
- for (unsigned j=0; j<n_atoms;j++)
- {
-  dmind_dx[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dx[j];
-  dmind_dy[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dy[j];
-  dmind_dz[j]=((pow(mind,2)*exp_theta_r[j])/(sum_exp*pow(r[j],2)))*dr_dz[j];
- }
-}
-
-void Probe::calculate_CC()
-{
- double m=mind/CCmin;
- CC=Son_m(m,1);
- double dCC=dSon_dm(m,1)*dm_dv(CCmin);
- for (unsigned j=0;j<n_atoms;j++)
- {
-   dCC_dx[j]=dCC*dmind_dx[j];
-   dCC_dy[j]=dCC*dmind_dy[j];
-   dCC_dz[j]=dCC*dmind_dz[j];
- }
-}
-
-void Probe::calculate_D()
-{
- D=0;
- for (unsigned j=0;j<n_atoms;j++)
- {
-   //cout << Son_r[j] << " " << Soff_r[j] << endl;
-   D+=Son_r[j]*Soff_r[j];
-   dD_dx[j]=dSon_r_dx[j]*Soff_r[j]+dSoff_r_dx[j]*Son_r[j];
-   dD_dy[j]=dSon_r_dy[j]*Soff_r[j]+dSoff_r_dy[j]*Son_r[j];
-   dD_dz[j]=dSon_r_dz[j]*Soff_r[j]+dSoff_r_dz[j]*Son_r[j];
- }
-}
-
-void Probe::calculate_H()
-{
- double m=(D-Dmin)/deltaD;
- H=Son_m(m,1);
- double dH=dSon_dm(m,1)*dm_dv(deltaD);
- for (unsigned j=0;j<n_atoms;j++)
- {
-   dH_dx[j]=dH*dD_dx[j];
-   dH_dy[j]=dH*dD_dy[j];
-   dH_dz[j]=dH*dD_dz[j];
+  Phi+=Son_r[j]*Soff_r[j];
+  dPhi_dx[j]=Son_r[j]*dSoff_r_dx[j]+Soff_r[j]*dSon_r_dx[j];
+  dPhi_dy[j]=Son_r[j]*dSoff_r_dy[j]+Soff_r[j]*dSon_r_dy[j];
+  dPhi_dz[j]=Son_r[j]*dSoff_r_dz[j]+Soff_r[j]*dSon_r_dz[j];
  }
 }
 
@@ -315,18 +220,16 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  calculate_r(atoms_x,atoms_y,atoms_z);
  calculate_Soff_r();
  calculate_Son_r();
- calculate_mind();
- calculate_CC();
- calculate_D();
- calculate_H();
- activity=CC*H;
- for (unsigned j=0;j<n_atoms;j++)
+ calculate_Phi();
+ double m_Phi=COREFUNCTIONS::m_v(Phi,Phimin,deltaPhi);
+ double dm_dPhi=COREFUNCTIONS::dm_dv(deltaPhi);
+ activity=COREFUNCTIONS::Son_m(m_Phi,1);
+ for (unsigned j=0; j<n_atoms;j++)
  {
-   d_activity_dx[j]=dCC_dx[j]*H+dH_dx[j]*CC;
-   d_activity_dy[j]=dCC_dy[j]*H+dH_dy[j]*CC;
-   d_activity_dz[j]=dCC_dz[j]*H+dH_dz[j]*CC;
+  d_activity_dx[j]=COREFUNCTIONS::dSon_dm(m_Phi,1)*dm_dPhi*dPhi_dx[j];
+  d_activity_dy[j]=COREFUNCTIONS::dSon_dm(m_Phi,1)*dm_dPhi*dPhi_dy[j];
+  d_activity_dz[j]=COREFUNCTIONS::dSon_dm(m_Phi,1)*dm_dPhi*dPhi_dz[j];
  }
- activity_cum+=activity;
 }
 
 void Probe::kabsch()
@@ -415,7 +318,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step Dref min_r mind CC D H Psi Ptries" << endl;
+   wfile << "Step Dref min_r Phi Psi Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -424,8 +327,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << min_r << " " << mind << " " << CC << " " << D << " " << H << " " 
-        << activity << " " << ptries << endl;
+  wfile << step << " " << r << " " << min_r << " " << Phi << " " << activity << " " << ptries << endl;
   wfile.close();
 }
 

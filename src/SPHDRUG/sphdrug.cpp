@@ -60,20 +60,13 @@ namespace PLMD
       bool noupdate;
       double kpert=0;
       unsigned pertstride=0;
-      // Variables necessary to check results
-      bool target;
-      vector<PLMD::AtomNumber> atoms_target; // indices of the atoms defining the target pocket
-      unsigned n_target=0;                     // number of atoms used in TARGET
-      vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
+
       // Parameters
-      double mind_slope=0;     // slope of the mind linear implementation
-      double mind_intercept=0; // intercept of the mind linear implementation
-      double theta=0;
       double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
       double CCmax=0;          // distance above which an atom is considered to be too far away from the probe*
       double deltaCC=0;        // interval over which contact terms are turned on and off
-      double Dmin=0;           // packing factor below which depth term equals 0
-      double deltaD=0;         // interval over which depth term turns from 0 to 1
+      double phimin=0;           // packing factor below which depth term equals 0
+      double deltaphi=0;         // interval over which depth term turns from 0 to 1
 
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
@@ -142,18 +135,14 @@ namespace PLMD
       keys.addFlag("PERFORMANCE", false, "measure execution time");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
-      keys.add("atoms", "TARGET", "Atoms defining the target pocket (not necessarily among ATOMS)");
       keys.add("optional", "NPROBES", "Number of probes to use");
       keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
       keys.add("optional", "CCMIN", "");
       keys.add("optional", "CCMAX", "");
       keys.add("optional", "DELTACC", "");
-      keys.add("optional", "MINDSLOPE", "");
-      keys.add("optional", "MINDINTERCEPT", "");
-      keys.add("optional", "THETA", "");
-      keys.add("optional", "DMIN", "");
-      keys.add("optional", "DELTAD", "");
+      keys.add("optional", "PHIMIN", "");
+      keys.add("optional", "DELTAPHI", "");
       keys.add("optional", "KPERT", "");
       keys.add("optional", "PERTSTRIDE", "");
     }
@@ -163,8 +152,7 @@ namespace PLMD
                                                 nocvcalc(false),
                                                 noupdate(false),
                                                 nodxfix(false),
-                                                performance(false),
-                                                target(true)
+                                                performance(false)
     {
 /*
 Initialising openMP threads.
@@ -191,7 +179,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parseAtomList("ATOMS", atoms);
       parseAtomList("ATOMS_INIT", atoms_init);
-      parseAtomList("TARGET", atoms_target);
 
       n_atoms = atoms.size();
 
@@ -200,20 +187,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         atoms.push_back(atoms_init[j]);
         init_j.push_back(n_atoms + j);
-      }
-
-      if (atoms_target.size() == 0)
-      {
-        target = false;
-      }
-      else
-      {
-        n_target = atoms_target.size();
-        for (unsigned j = 0; j < n_target; j++)
-        {
-          atoms.push_back(atoms_target[j]);
-          target_j.push_back(n_atoms + n_init + j);
-        }
       }
 
       cout << "Requesting " << n_atoms << " atoms" << endl;
@@ -261,30 +234,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         deltaCC = 0.15;
       cout << "deltaCC = " << deltaCC << " nm" << endl;
 
-      parse("THETA", theta);
-      if (!theta)
-        theta = 50; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "THETA = " << theta << endl;
+      parse("PHIMIN", phimin);
+      if (!phimin)
+        phimin = 10; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "PHIMIN = " << phimin << endl;
 
-      parse("MINDSLOPE", mind_slope);
-      if (!mind_slope)
-        mind_slope = 1; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "MINDSLOPE = " << mind_slope << endl;
-
-      parse("MINDINTERCEPT", mind_intercept);
-      if (!mind_intercept)
-        mind_intercept = 0; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "MINDINTERCEPT = " << mind_intercept << " nm" << endl;
-
-      parse("DMIN", Dmin);
-      if (!Dmin)
-        Dmin = 10; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "DMIN = " << Dmin << endl;
-
-      parse("DELTAD", deltaD);
-      if (!deltaD)
-        deltaD = 15; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "DELTAD = " << deltaD << endl;
+      parse("DELTAPHI", deltaphi);
+      if (!deltaphi)
+        deltaphi = 15; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "DELTAPHI = " << deltaphi << endl;
 
       parse("KPERT",kpert);
       cout << "KPERT = " << kpert << " nm"; 
@@ -295,7 +253,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parse("PERTSTRIDE",pertstride);
       if (!pertstride)
          pertstride=100;
-      cout << "PERTSTRIDE = " << pertstride << " nm" << endl;
+      cout << "PERTSTRIDE = " << pertstride << endl;
       if (kpert)
          cout << "Probe will be perturbed every " << pertstride << " steps";
       cout << endl;
@@ -303,7 +261,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(mind_slope, mind_intercept, theta, CCmin, CCmax, deltaCC, Dmin, deltaD, n_atoms, kpert));
+        probes.push_back(Probe(CCmin, CCmax, deltaCC, phimin, deltaphi, n_atoms, kpert));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
@@ -607,7 +565,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
          print_protein();
          for (unsigned i=0; i<nprobes;i++)
          {
-          // Get coordinates of the reference atom (change to target at some point?)
+          // Get coordinates of the reference atom
           unsigned j = init_j[i];
 
           double ref_x = getPosition(j)[0];

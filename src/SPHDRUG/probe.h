@@ -12,13 +12,11 @@ class Probe
  private:
   //parameters
   unsigned n_atoms;
-  double mind_slope; //slope of the mind linear implementation
-  double mind_intercept; //intercept of the mind linear implementation
   double CCmin; // mind below which an atom is considered to be clashing with the probe 
   double CCmax; // distance above which an atom is considered to be too far away from the probe*
   double deltaCC; // interval over which contact terms are turned on and off
-  double Dmin; // packing factor below which depth term equals 0
-  double deltaD; // interval over which depth term turns from 0 to 1
+  double Phimin; // packing factor below which depth term equals 0
+  double deltaPhi; // interval over which depth term turns from 0 to 1
   double Kpert;
   double theta;
   
@@ -38,45 +36,23 @@ class Probe
   unsigned j_min_r;
 
   vector<double> Soff_r;
-  double total_Soff;
   vector<double> dSoff_r_dx;
   vector<double> dSoff_r_dy;
   vector<double> dSoff_r_dz;
   void calculate_Soff_r();
 
   vector<double> Son_r;
-  double total_Son;
   vector<double> dSon_r_dx;
   vector<double> dSon_r_dy;
   vector<double> dSon_r_dz;
   void calculate_Son_r();
 
-  double mind;
-  vector<double> dmind_dx;
-  vector<double> dmind_dy;
-  vector<double> dmind_dz;
-  vector<double> exp_theta_r;
-  void calculate_mind();
-  void calculate_mind_exp();
+  double Phi;
+  vector<double> dPhi_dx;
+  vector<double> dPhi_dy;
+  vector<double> dPhi_dz;
+  void calculate_Phi();
 
-  double CC;
-  double dCC_dr;
-  vector<double> dCC_dx;
-  vector<double> dCC_dy;
-  vector<double> dCC_dz;
-  void calculate_CC();
-
-  double D;
-  vector<double> dD_dx;
-  vector<double> dD_dy;
-  vector<double> dD_dz;
-  void calculate_D();
-  
-  double H;
-  vector<double> dH_dx;
-  vector<double> dH_dy;
-  vector<double> dH_dz;
-  void calculate_H();
 
   //coordinates
   vector<double> xyz;
@@ -102,7 +78,7 @@ class Probe
   void calc_pert();
 
  public:
-    Probe(double Mind_slope, double Mind_intercept, double Theta, double CCMin, double CCMax,double DeltaCC, double DMin, double DeltaD, unsigned n_atoms, double kpert);
+    Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, unsigned N_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
@@ -113,8 +89,6 @@ class Probe
     double activity;
     double activity_cum; // cummulative activity over PERTSTRIDE steps
     double activity_old; // cummulative activity over the last period 
-    double Dcum; //cumulative depth over PERTSTRIDE steps
-    double Dold; //cummulative depth over the last period
     double pert_accepted;
     double pert_rejected;
     double pert_acceptance;
