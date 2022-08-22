@@ -65,6 +65,8 @@ namespace PLMD
       double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
       double CCmax=0;          // distance above which an atom is considered to be too far away from the probe*
       double deltaCC=0;        // interval over which contact terms are turned on and off
+      double psimin=0;           // packing factor below which depth term equals 0
+      double deltapsi=0;         // interval over which depth term turns from 0 to 1
       double phimin=0;           // packing factor below which depth term equals 0
       double deltaphi=0;         // interval over which depth term turns from 0 to 1
 
@@ -143,6 +145,8 @@ namespace PLMD
       keys.add("optional", "DELTACC", "");
       keys.add("optional", "PHIMIN", "");
       keys.add("optional", "DELTAPHI", "");
+      keys.add("optional", "PSIMIN", "");
+      keys.add("optional", "DELTAPSI", "");
       keys.add("optional", "KPERT", "");
       keys.add("optional", "PERTSTRIDE", "");
     }
@@ -236,13 +240,23 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("PHIMIN", phimin);
       if (!phimin)
-        phimin = 10; // obtained from generating 10000 random points in VHL's crystal structure
+        phimin = 0; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "PHIMIN = " << phimin << endl;
 
       parse("DELTAPHI", deltaphi);
       if (!deltaphi)
-        deltaphi = 15; // obtained from generating 10000 random points in VHL's crystal structure
+        deltaphi = 1; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "DELTAPHI = " << deltaphi << endl;
+
+      parse("PSIMIN", psimin);
+      if (!psimin)
+        psimin = 10; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "PSIMIN = " << psimin << endl;
+
+      parse("DELTAPSI", deltapsi);
+      if (!deltapsi)
+        deltapsi = 15; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "DELTAPSI = " << deltapsi << endl;
 
       parse("KPERT",kpert);
       cout << "KPERT = " << kpert << " nm"; 
@@ -261,7 +275,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(CCmin, CCmax, deltaCC, phimin, deltaphi, n_atoms, kpert));
+        probes.push_back(Probe(CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
