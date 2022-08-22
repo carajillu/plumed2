@@ -17,6 +17,8 @@ class Probe
   double deltaCC; // interval over which contact terms are turned on and off
   double Phimin; // packing factor below which depth term equals 0
   double deltaPhi; // interval over which depth term turns from 0 to 1
+  double Psimin; // packing factor below which depth term equals 0
+  double deltaPsi; // interval over which depth term turns from 0 to 1
   double Kpert;
   double theta;
   
@@ -35,22 +37,33 @@ class Probe
   double min_r; 
   unsigned j_min_r;
 
-  vector<double> Soff_r;
-  vector<double> dSoff_r_dx;
-  vector<double> dSoff_r_dy;
-  vector<double> dSoff_r_dz;
-  void calculate_Soff_r();
+  //Enclosure score
+  vector<double> enclosure;
+  double total_enclosure;
+  vector<double> d_enclosure_dx;
+  vector<double> d_enclosure_dy;
+  vector<double> d_enclosure_dz;
+  void calculate_enclosure();
 
-  vector<double> Son_r;
-  vector<double> dSon_r_dx;
-  vector<double> dSon_r_dy;
-  vector<double> dSon_r_dz;
-  void calculate_Son_r();
+  double Psi;
+  vector<double> dPsi_dx;
+  vector<double> dPsi_dy;
+  vector<double> dPsi_dz;
+  //Psi=S_on(total_enclosure)
+  void calculate_Psi(); 
+
+  vector<double> clash;
+  double total_clash;
+  vector<double> d_clash_dx;
+  vector<double> d_clash_dy;
+  vector<double> d_clash_dz;
+  void calculate_clash();
 
   double Phi;
   vector<double> dPhi_dx;
   vector<double> dPhi_dy;
   vector<double> dPhi_dz;
+  //Phi=S_off(total_clash)
   void calculate_Phi();
 
 
@@ -78,7 +91,7 @@ class Probe
   void calc_pert();
 
  public:
-    Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, unsigned N_atoms, double kpert);
+    Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
