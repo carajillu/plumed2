@@ -185,12 +185,26 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseAtomList("ATOMS_INIT", atoms_init);
 
       n_atoms = atoms.size();
-
       n_init = atoms_init.size();
-      for (unsigned j = 0; j < n_init; j++)
+
+      //The following bit checks if ATOMS_INIT are already in ATOMS.
+      //Those that are are not requested twice.
+      for (unsigned k = 0; k < atoms_init.size(); k++)
       {
-        atoms.push_back(atoms_init[j]);
-        init_j.push_back(n_atoms + j);
+        for (unsigned j=0; j<atoms.size(); j++)
+        {
+          if (atoms_init[k]==atoms[j])
+          {
+           init_j.push_back(j);
+           break; 
+          }
+          if (j==(atoms.size()-1))
+          {
+            cout << "Atom " << atoms_init[k].serial() << " not found in ATOMS. Exiting." << endl;
+            atoms.push_back(atoms_init[k]);
+            init_j.push_back(n_atoms+1);
+          }
+        }
       }
 
       cout << "Requesting " << n_atoms << " atoms" << endl;
