@@ -377,7 +377,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step Dref min_r enclosure Psi clash Phi activity activity_cum activity_old Ptries" << endl;
+   wfile << "Step Dref min_r_serial min_r enclosure Psi clash Phi activity activity_cum activity_old Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -386,7 +386,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << min_r << " " 
+  wfile << step << " " << r << " " << atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << Psi << " " 
         << total_clash << " " << Phi << " " 
         << activity << " " << activity_cum << " " << activity_old << " "
