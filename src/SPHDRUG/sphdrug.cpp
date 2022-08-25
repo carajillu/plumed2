@@ -289,7 +289,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       for (unsigned i = 0; i < nprobes; i++)
       {
 
-        probes.push_back(Probe(CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert));
+        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
@@ -571,7 +571,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
-
+        
         if (step%pertstride==0 and step>0 and (!nodxfix))
            probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
       }

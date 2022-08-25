@@ -24,6 +24,9 @@ class Probe
   
   //stuff
 
+  unsigned probe_id;
+  bool dxcalc; // avoid derivative calculation when perturbing probe
+
   vector<double> rx;
   vector<double> ry;
   vector<double> rz;
@@ -91,7 +94,7 @@ class Probe
   void calc_pert();
 
  public:
-    Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert);
+    Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);

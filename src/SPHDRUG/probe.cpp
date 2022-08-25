@@ -18,8 +18,10 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert)
+Probe::Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert)
 {
+  probe_id=Probe_id;
+  dxcalc=true;
   n_atoms=N_atoms;
   CCmin=CCMin; // mind below which an atom is considered to be clashing with the probe 
   CCmax=CCMax; // distance above which an atom is considered to be too far away from the probe*
@@ -116,32 +118,42 @@ void Probe::calc_pert()
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
   //if no perturbation is needed, just update data and leave
-  if ((activity_cum >= activity_old) and step>0)
+  if ((activity_cum > activity_old) and step>0)
   {
    activity_old=activity_cum;
    activity_cum=0;
    ptries=0;
    return;
   }
+
+  dxcalc=false; // switch off derivatives calculation during the perturbation trials
   xyz0=xyz;
   ptries=0;
-  activity=0;
-  while (activity<0.0000000001)
+  Psi=0;
+  while (Psi<0.0000000001)
   {
     xyz=xyz0;
     calc_pert();
-    calculate_activity(atoms_x,atoms_y,atoms_z);
+    calculate_r(atoms_x,atoms_y,atoms_z);
+    calculate_Psi();
     ptries++;
-    if (ptries > 10000) 
+    if (ptries > 1000000) 
     {
-      cout << "Probe could not be settled after 10000 perturbation trials. Exiting." << endl;
-      cout << "r_min    enclosure   clash   Phi   Psi" << endl;
-      cout <<  min_r << "    " << total_enclosure<<"    "<<total_clash<<"    "<<Phi<<"    "<< activity << endl;
-      exit(0);
+      cout << "Probe " << probe_id << " could not be settled after 10000 perturbation trials." << endl;
+      cout << "min_r enclosure Psi clash Phi activity activity_cum activity_old Ptries" << endl;
+      cout << min_r << " " 
+           << total_enclosure << " " << Psi << " " 
+           << total_clash << " " << Phi << " " 
+           << activity << " " << activity_cum << " " << activity_old << " "
+           << ptries << endl;
+      cout << "reverting Probe " << probe_id << " to its unperturbed coordinates." << endl;
+      xyz=xyz0;
+      break;
     }
-    activity_old=activity_cum;
-    activity_cum=0;
   }    
+  activity_old=activity_cum;
+  activity_cum=0;
+  dxcalc=true; //switch derivatives calculation back on
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -156,10 +168,12 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
    rz[j]=atoms_z[j]-xyz[2];
 
    r[j]=sqrt(pow(rx[j],2)+pow(ry[j],2)+pow(rz[j],2));
-
+   if (dxcalc)
+   {
    dr_dx[j]=rx[j]/r[j];
    dr_dy[j]=ry[j]/r[j];
    dr_dz[j]=rz[j]/r[j];
+   }
 
    if (r[j]<min_r)
    {
@@ -188,10 +202,12 @@ void Probe::calculate_enclosure()
   double dm_dr=COREFUNCTIONS::dm_dv(deltaCC);
 
   enclosure[j]=COREFUNCTIONS::Soff_m(m_r,1);
+  if (dxcalc)
+  {
   d_enclosure_dx[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dx[j];
   d_enclosure_dy[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dy[j];
   d_enclosure_dz[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dz[j];
-
+  }
   total_enclosure+=enclosure[j];
  }
 }
@@ -202,11 +218,14 @@ void Probe::calculate_Psi()
  double m_enclosure=COREFUNCTIONS::m_v(total_enclosure,Psimin,deltaPsi);
  double dm_enclosure=COREFUNCTIONS::dm_dv(deltaPsi);
  Psi=COREFUNCTIONS::Son_m(m_enclosure,1);
- for (unsigned j=0; j<n_atoms; j++)
+ if (dxcalc)
  {
-  dPsi_dx[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dx[j];
-  dPsi_dy[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dy[j];
-  dPsi_dz[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dz[j];
+  for (unsigned j=0; j<n_atoms; j++)
+  {
+   dPsi_dx[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dx[j];
+   dPsi_dy[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dy[j];
+   dPsi_dz[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dz[j];
+  }
  }
 }
 
@@ -227,10 +246,12 @@ void Probe::calculate_clash()
   double dm_dr=COREFUNCTIONS::dm_dv(deltaCC);
 
   clash[j]=COREFUNCTIONS::Soff_m(m_r,1);
+  if (dxcalc)
+  {
   d_clash_dx[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dx[j];
   d_clash_dy[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dy[j];
   d_clash_dz[j]=COREFUNCTIONS::dSoff_dm(m_r,1)*dm_dr*dr_dz[j];
-
+  }
   total_clash+=clash[j];
  }
 }
@@ -241,11 +262,14 @@ void Probe::calculate_Phi()
  double m_clash=COREFUNCTIONS::m_v(total_clash,Phimin,deltaPhi);
  double dm_clash=COREFUNCTIONS::dm_dv(deltaPhi);
  Phi=COREFUNCTIONS::Soff_m(m_clash,1);
- for (unsigned j=0; j<n_atoms; j++)
+ if (dxcalc)
  {
-  dPhi_dx[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dx[j];
-  dPhi_dy[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dy[j];
-  dPhi_dz[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dz[j];
+  for (unsigned j=0; j<n_atoms; j++)
+   {
+    dPhi_dx[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dx[j];
+    dPhi_dy[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dy[j];
+    dPhi_dz[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dz[j];
+   }
  }
 }
 
@@ -255,12 +279,16 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  calculate_Phi();
  calculate_Psi();
  activity=Phi*Psi;
- for (unsigned j=0; j<n_atoms;j++)
+ if (dxcalc)
  {
-  d_activity_dx[j]=Phi*dPsi_dx[j]+Psi*dPhi_dx[j];
-  d_activity_dy[j]=Phi*dPsi_dy[j]+Psi*dPhi_dy[j];
-  d_activity_dz[j]=Phi*dPsi_dz[j]+Psi*dPhi_dz[j];
+  for (unsigned j=0; j<n_atoms;j++)
+  {
+   d_activity_dx[j]=Phi*dPsi_dx[j]+Psi*dPhi_dx[j];
+   d_activity_dy[j]=Phi*dPsi_dy[j]+Psi*dPhi_dy[j];
+   d_activity_dz[j]=Phi*dPsi_dz[j]+Psi*dPhi_dz[j];
+  }
  }
+ activity_cum+=activity;
 }
 
 void Probe::kabsch()
@@ -349,7 +377,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step Dref min_r enclosure Psi clash Phi activity Ptries" << endl;
+   wfile << "Step Dref min_r enclosure Psi clash Phi activity activity_cum activity_old Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -358,7 +386,11 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << min_r << " " << total_enclosure << " " << Psi << " " << total_clash << " " << Phi << " " << activity << " " << ptries << endl;
+  wfile << step << " " << r << " " << min_r << " " 
+        << total_enclosure << " " << Psi << " " 
+        << total_clash << " " << Phi << " " 
+        << activity << " " << activity_cum << " " << activity_old << " "
+        << ptries << endl;
   wfile.close();
 }
 
