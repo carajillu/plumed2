@@ -118,7 +118,7 @@ if __name__=="__main__":
     newtraj.save_xtc(args.output+".xtc")
 
     prot_traj=newtraj.atom_slice(newtraj.topology.select("not resname PRB"))
-    prot_traj.save_gro("protein.gro")
+    prot_traj[0].save_gro("protein.gro")
     prot_traj.save_xtc("protein.xtc")
     
     probes_trj=newtraj.atom_slice(newtraj.topology.select("resname PRB"))
