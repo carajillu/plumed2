@@ -18,8 +18,10 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert)
+Probe::Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert, unsigned Init_j, double Max_r_init)
 {
+  init_j=Init_j;
+  max_r_init=Max_r_init;
   probe_id=Probe_id;
   dxcalc=true;
   n_atoms=N_atoms;
@@ -118,7 +120,7 @@ void Probe::calc_pert()
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
   //if no perturbation is needed, just update data and leave
-  if ((activity_cum > activity_old) and step>0)
+  if (((activity_cum > activity_old) and step>0))
   {
    activity_old=activity_cum;
    activity_cum=0;
@@ -130,15 +132,19 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
   xyz0=xyz;
   ptries=0;
   Psi=0;
-  while (Psi<0.0000000001)
+  double r=INFINITY;
+
+  while (Psi<0.0000000001 or r>max_r_init)
   {
     xyz=xyz0;
     calc_pert();
     calculate_r(atoms_x,atoms_y,atoms_z);
     calculate_Psi();
+    r=sqrt((pow((xyz[0]-atoms_x[init_j]),2))+(pow((xyz[1]-atoms_y[init_j]),2))+(pow((xyz[2]-atoms_z[init_j]),2)));
     ptries++;
     if (ptries > 1000000) 
     {
+      /*
       cout << "Probe " << probe_id << " could not be settled after 10000 perturbation trials." << endl;
       cout << "min_r enclosure Psi clash Phi activity activity_cum activity_old Ptries" << endl;
       cout << min_r << " " 
@@ -147,6 +153,7 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
            << activity << " " << activity_cum << " " << activity_old << " "
            << ptries << endl;
       cout << "reverting Probe " << probe_id << " to its unperturbed coordinates." << endl;
+      */
       xyz=xyz0;
       break;
     }

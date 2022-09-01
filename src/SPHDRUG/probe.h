@@ -25,6 +25,7 @@ class Probe
   //stuff
 
   unsigned probe_id;
+  unsigned init_j; //index j of atom on which the probe is centered at the beginning
   bool dxcalc; // avoid derivative calculation when perturbing probe
 
   vector<double> rx;
@@ -91,10 +92,16 @@ class Probe
   vector<double> xyz_pert;
   vector<double> xyz0;
   unsigned ptries;
+  double max_r_init;
   void calc_pert();
 
  public:
-    Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert);
+    Probe(unsigned Probe_id, 
+          double CCMin, double CCMax, double DeltaCC, 
+          double phimin, double deltaphi, 
+          double psimin, double deltapsi, 
+          unsigned N_atoms, double kpert, 
+          unsigned init_j, double max_r_init);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
