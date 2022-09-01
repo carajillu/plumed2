@@ -60,6 +60,7 @@ namespace PLMD
       bool noupdate;
       double kpert=0;
       unsigned pertstride=0;
+      double max_r_init=INFINITY;
 
       // Parameters
       double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
@@ -148,6 +149,7 @@ namespace PLMD
       keys.add("optional", "PSIMIN", "");
       keys.add("optional", "DELTAPSI", "");
       keys.add("optional", "KPERT", "");
+      keys.add("optional", "MAX_R_INIT", "");
       keys.add("optional", "PERTSTRIDE", "");
     }
 
@@ -214,7 +216,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
-        nprobes = 1;
+        nprobes = 16;
       }
 
       if (nprobes != atoms_init.size() and atoms_init.size() > 0)
@@ -239,12 +241,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("CCMIN", CCmin);
       if (!CCmin)
-        CCmin = 0.3;
+        CCmin = 0.25;
       cout << "CCmin = " << CCmin << " nm" << endl;
 
       parse("CCMAX", CCmax);
       if (!CCmax)
-        CCmax = 0.45;
+        CCmax = 0.6;
       cout << "CCmax = " << CCmax << " nm" << endl;
 
       parse("DELTACC", deltaCC);
@@ -259,12 +261,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("DELTAPHI", deltaphi);
       if (!deltaphi)
-        deltaphi = 1; // obtained from generating 10000 random points in VHL's crystal structure
+        deltaphi = 7; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "DELTAPHI = " << deltaphi << endl;
 
       parse("PSIMIN", psimin);
       if (!psimin)
-        psimin = 10; // obtained from generating 10000 random points in VHL's crystal structure
+        psimin = 25; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "PSIMIN = " << psimin << endl;
 
       parse("DELTAPSI", deltapsi);
@@ -279,17 +281,25 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << endl;
 
       parse("PERTSTRIDE",pertstride);
-      if (!pertstride)
-         pertstride=100;
+      parse("MAX_R_INIT",max_r_init);
+      
+      if (!pertstride)  
+          pertstride=100;
       cout << "PERTSTRIDE = " << pertstride << endl;
-      if (kpert)
-         cout << "Probe will be perturbed every " << pertstride << " steps";
-      cout << endl;
+      cout << "Probe will be perturbed every " << pertstride << " steps";
+      cout << endl;  
+        
+      if (!max_r_init)
+         max_r_init=INFINITY;
+      cout << "probe will not be allowed to drift further than " << max_r_init << " nm from the atom it has been initialised on" << endl;
+      
+
+
 
       for (unsigned i = 0; i < nprobes; i++)
       {
-
-        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert));
+        double max_r_init=0.5;
+        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert,init_j[i],max_r_init));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
