@@ -62,13 +62,13 @@ namespace PLMD
       unsigned pertstride=0;
 
       // Parameters
-      double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
-      double CCmax=0;          // distance above which an atom is considered to be too far away from the probe*
-      double deltaCC=0;        // interval over which contact terms are turned on and off
-      double psimin=0;           // packing factor below which depth term equals 0
-      double deltapsi=0;         // interval over which depth term turns from 0 to 1
-      double phimin=0;           // packing factor below which depth term equals 0
-      double deltaphi=0;         // interval over which depth term turns from 0 to 1
+      double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
+      double Rmax=0;          // distance above which an atom is considered to be too far away from the probe*
+      double deltaR=0;        // interval over which contact terms are turned on and off
+      double Pmin=0;           // packing factor below which depth term equals 0
+      double deltaP=0;         // interval over which depth term turns from 0 to 1
+      double Cmin=0;           // packing factor below which depth term equals 0
+      double deltaC=0;         // interval over which depth term turns from 0 to 1
 
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
@@ -140,13 +140,13 @@ namespace PLMD
       keys.add("optional", "NPROBES", "Number of probes to use");
       keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
-      keys.add("optional", "CCMIN", "");
-      keys.add("optional", "CCMAX", "");
-      keys.add("optional", "DELTACC", "");
-      keys.add("optional", "PHIMIN", "");
-      keys.add("optional", "DELTAPHI", "");
-      keys.add("optional", "PSIMIN", "");
-      keys.add("optional", "DELTAPSI", "");
+      keys.add("optional", "RMIN", "");
+      keys.add("optional", "RMAX", "");
+      keys.add("optional", "DELTAR", "");
+      keys.add("optional", "CMIN", "");
+      keys.add("optional", "DELTAC", "");
+      keys.add("optional", "PMIN", "");
+      keys.add("optional", "DELTAP", "");
       keys.add("optional", "KPERT", "");
       keys.add("optional", "PERTSTRIDE", "");
     }
@@ -237,40 +237,40 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       cout << "Using " << nprobes << " spherical probe(s) with the following parameters:" << endl;
 
-      parse("CCMIN", CCmin);
-      if (!CCmin)
-        CCmin = 0.25;
-      cout << "CCmin = " << CCmin << " nm" << endl;
+      parse("RMIN", Rmin);
+      if (!Rmin)
+        Rmin = 0.25;
+      cout << "Rmin = " << Rmin << " nm" << endl;
 
-      parse("CCMAX", CCmax);
-      if (!CCmax)
-        CCmax = 0.6;
-      cout << "CCmax = " << CCmax << " nm" << endl;
+      parse("RMAX", Rmax);
+      if (!Rmax)
+        Rmax = 0.6;
+      cout << "Rmax = " << Rmax << " nm" << endl;
 
-      parse("DELTACC", deltaCC);
-      if (!deltaCC)
-        deltaCC = 0.15;
-      cout << "deltaCC = " << deltaCC << " nm" << endl;
+      parse("DELTAR", deltaR);
+      if (!deltaR)
+        deltaR = 0.15;
+      cout << "deltaR = " << deltaR << " nm" << endl;
 
-      parse("PHIMIN", phimin);
-      if (!phimin)
-        phimin = 0; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "PHIMIN = " << phimin << endl;
+      parse("CMIN", Cmin);
+      if (!Cmin)
+        Cmin = 0; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "CMIN = " << Cmin << endl;
 
-      parse("DELTAPHI", deltaphi);
-      if (!deltaphi)
-        deltaphi = 7; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "DELTAPHI = " << deltaphi << endl;
+      parse("DELTAC", deltaC);
+      if (!deltaC)
+        deltaC = 7; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "DELTAC = " << deltaC << endl;
 
-      parse("PSIMIN", psimin);
-      if (!psimin)
-        psimin = 25; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "PSIMIN = " << psimin << endl;
+      parse("PMIN", Pmin);
+      if (!Pmin)
+        Pmin = 25; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "PMIN = " << Pmin << endl;
 
-      parse("DELTAPSI", deltapsi);
-      if (!deltapsi)
-        deltapsi = 15; // obtained from generating 10000 random points in VHL's crystal structure
-      cout << "DELTAPSI = " << deltapsi << endl;
+      parse("DELTAP", deltaP);
+      if (!deltaP)
+        deltaP = 15; // obtained from generating 10000 random points in VHL's crystal structure
+      cout << "DELTAP = " << deltaP << endl;
 
       parse("KPERT",kpert);
       cout << "KPERT = " << kpert << " nm"; 
@@ -287,7 +287,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       
       for (unsigned i = 0; i < nprobes; i++)
       {
-        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert,init_j[i]));
+        probes.push_back(Probe(i,Rmin, Rmax, deltaR, Cmin, deltaC, Pmin, deltaP, n_atoms, kpert,init_j[i]));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
