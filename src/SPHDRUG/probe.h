@@ -12,13 +12,13 @@ class Probe
  private:
   //parameters
   unsigned n_atoms;
-  double CCmin; // mind below which an atom is considered to be clashing with the probe 
-  double CCmax; // distance above which an atom is considered to be too far away from the probe*
-  double deltaCC; // interval over which contact terms are turned on and off
-  double Phimin; // packing factor below which depth term equals 0
-  double deltaPhi; // interval over which depth term turns from 0 to 1
-  double Psimin; // packing factor below which depth term equals 0
-  double deltaPsi; // interval over which depth term turns from 0 to 1
+  double Rmin; // mind below which an atom is considered to be clashing with the probe 
+  double Rmax; // distance above which an atom is considered to be too far away from the probe*
+  double deltaR; // interval over which contact terms are turned on and off
+  double Cmin; // packing factor below which depth term equals 0
+  double deltaC; // interval over which depth term turns from 0 to 1
+  double Pmin; // packing factor below which depth term equals 0
+  double deltaP; // interval over which depth term turns from 0 to 1
   double Kpert;
   double theta;
   
@@ -49,12 +49,12 @@ class Probe
   vector<double> d_enclosure_dz;
   void calculate_enclosure();
 
-  double Psi;
-  vector<double> dPsi_dx;
-  vector<double> dPsi_dy;
-  vector<double> dPsi_dz;
-  //Psi=S_on(total_enclosure)
-  void calculate_Psi(); 
+  double P;
+  vector<double> dP_dx;
+  vector<double> dP_dy;
+  vector<double> dP_dz;
+  //P=S_on(total_enclosure)
+  void calculate_P(); 
 
   vector<double> clash;
   double total_clash;
@@ -63,12 +63,12 @@ class Probe
   vector<double> d_clash_dz;
   void calculate_clash();
 
-  double Phi;
-  vector<double> dPhi_dx;
-  vector<double> dPhi_dy;
-  vector<double> dPhi_dz;
-  //Phi=S_off(total_clash)
-  void calculate_Phi();
+  double C;
+  vector<double> dC_dx;
+  vector<double> dC_dy;
+  vector<double> dC_dz;
+  //C=S_off(total_clash)
+  void calculate_C();
 
 
   //coordinates
@@ -96,7 +96,7 @@ class Probe
 
  public:
     Probe(unsigned Probe_id, 
-          double CCMin, double CCMax, double DeltaCC, 
+          double RMin, double RMax, double DeltaR, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
           unsigned N_atoms, double kpert, 

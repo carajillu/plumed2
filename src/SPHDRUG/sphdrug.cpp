@@ -90,10 +90,10 @@ namespace PLMD
 
       // Calculation of CV and its derivatives
 
-      double ghostprobe=0;
-      vector<double> d_Ghostprobe_dx;
-      vector<double> d_Ghostprobe_dy;
-      vector<double> d_Ghostprobe_dz;
+      double Psi=0;
+      vector<double> d_Psi_dx;
+      vector<double> d_Psi_dy;
+      vector<double> d_Psi_dz;
 
       // Correction of derivatives
       double sum_d_dx;
@@ -307,10 +307,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       atoms_z = vector<double>(n_atoms, 0);
 
       cout << "---------Initialisng Ghostprobe and its derivatives---------" << endl;
-      ghostprobe = 0;
-      d_Ghostprobe_dx = vector<double>(n_atoms, 0);
-      d_Ghostprobe_dy = vector<double>(n_atoms, 0);
-      d_Ghostprobe_dz = vector<double>(n_atoms, 0);
+      Psi = 0;
+      d_Psi_dx = vector<double>(n_atoms, 0);
+      d_Psi_dy = vector<double>(n_atoms, 0);
+      d_Psi_dz = vector<double>(n_atoms, 0);
 
       if (nocvcalc)
          cout << "WARNING: NOCVCALC flag has been included. CV will NOT be calculated." << endl;
@@ -342,10 +342,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     // reset Ghostprobe and derivatives to 0
     void Ghostprobe::reset()
     {
-      ghostprobe = 0;
-      fill(d_Ghostprobe_dx.begin(), d_Ghostprobe_dx.end(), 0);
-      fill(d_Ghostprobe_dy.begin(), d_Ghostprobe_dy.end(), 0);
-      fill(d_Ghostprobe_dz.begin(), d_Ghostprobe_dz.end(), 0);
+      Psi = 0;
+      fill(d_Psi_dx.begin(), d_Psi_dx.end(), 0);
+      fill(d_Psi_dy.begin(), d_Psi_dy.end(), 0);
+      fill(d_Psi_dz.begin(), d_Psi_dz.end(), 0);
 
       sum_d_dx = 0;
       sum_d_dy = 0;
@@ -366,13 +366,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        sum_d_dx += d_Ghostprobe_dx[j];
-        sum_d_dy += d_Ghostprobe_dy[j];
-        sum_d_dz += d_Ghostprobe_dz[j];
+        sum_d_dx += d_Psi_dx[j];
+        sum_d_dy += d_Psi_dy[j];
+        sum_d_dz += d_Psi_dz[j];
 
-        sum_t_dx += atoms_y[j] * d_Ghostprobe_dz[j] - atoms_z[j] * d_Ghostprobe_dy[j];
-        sum_t_dy += atoms_z[j] * d_Ghostprobe_dx[j] - atoms_x[j] * d_Ghostprobe_dz[j];
-        sum_t_dz += atoms_x[j] * d_Ghostprobe_dy[j] - atoms_y[j] * d_Ghostprobe_dx[j];
+        sum_t_dx += atoms_y[j] * d_Psi_dz[j] - atoms_z[j] * d_Psi_dy[j];
+        sum_t_dy += atoms_z[j] * d_Psi_dx[j] - atoms_x[j] * d_Psi_dz[j];
+        sum_t_dz += atoms_x[j] * d_Psi_dy[j] - atoms_y[j] * d_Psi_dx[j];
       }
       L[0] = -sum_d_dx;
       L[1] = -sum_d_dy;
@@ -442,9 +442,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        d_Ghostprobe_dx[j] += P[j + 0 * n_atoms];
-        d_Ghostprobe_dy[j] += P[j + 1 * n_atoms];
-        d_Ghostprobe_dz[j] += P[j + 2 * n_atoms];
+        d_Psi_dx[j] += P[j + 0 * n_atoms];
+        d_Psi_dy[j] += P[j + 1 * n_atoms];
+        d_Psi_dz[j] += P[j + 2 * n_atoms];
       }
       // auto point5=high_resolution_clock::now();
 
@@ -459,13 +459,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       for (unsigned j=0;j<n_atoms;j++)
       {
-       sum_d_dx+=d_Ghostprobe_dx[j];
-       sum_d_dy+=d_Ghostprobe_dy[j];
-       sum_d_dz+=d_Ghostprobe_dz[j];
+       sum_d_dx+=d_Psi_dx[j];
+       sum_d_dy+=d_Psi_dy[j];
+       sum_d_dz+=d_Psi_dz[j];
 
-       sum_t_dx+=atoms_y[j]*d_Ghostprobe_dz[j]-atoms_z[j]*d_Ghostprobe_dy[j];
-       sum_t_dy+=atoms_z[j]*d_Ghostprobe_dx[j]-atoms_x[j]*d_Ghostprobe_dz[j];
-       sum_t_dz+=atoms_x[j]*d_Ghostprobe_dy[j]-atoms_y[j]*d_Ghostprobe_dx[j];
+       sum_t_dx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
+       sum_t_dy+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
+       sum_t_dz+=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
       }
 
       if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
@@ -561,12 +561,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
-          ghostprobe+=probes[i].activity/nprobes;
+          Psi+=probes[i].activity/nprobes;
           for (unsigned j=0;j<n_atoms;j++)
           {
-            d_Ghostprobe_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
-            d_Ghostprobe_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
-            d_Ghostprobe_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+            d_Psi_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
+            d_Psi_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
+            d_Psi_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
         
@@ -579,10 +579,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        correct_derivatives();
       }
    
-      setValue(ghostprobe);
+      setValue(Psi);
       for (unsigned j=0;j<n_atoms;j++)
       {
-        setAtomsDerivatives(j,Vector(d_Ghostprobe_dx[j],d_Ghostprobe_dy[j],d_Ghostprobe_dz[j]));
+        setAtomsDerivatives(j,Vector(d_Psi_dx[j],d_Psi_dy[j],d_Psi_dz[j]));
       }
 
       //print output for post_processing
