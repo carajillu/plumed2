@@ -46,7 +46,7 @@ namespace PLMD
     Add CV info
     +ENDPLUMEDOC*/
 
-    class Sphdrug : public Colvar
+    class Ghostprobe : public Colvar
     {
       // Execution control variables
       int nthreads=0;     // number of available OMP threads
@@ -90,10 +90,10 @@ namespace PLMD
 
       // Calculation of CV and its derivatives
 
-      double sphdrug=0;
-      vector<double> d_Sphdrug_dx;
-      vector<double> d_Sphdrug_dy;
-      vector<double> d_Sphdrug_dz;
+      double ghostprobe=0;
+      vector<double> d_Ghostprobe_dx;
+      vector<double> d_Ghostprobe_dy;
+      vector<double> d_Ghostprobe_dz;
 
       // Correction of derivatives
       double sum_d_dx;
@@ -115,7 +115,7 @@ namespace PLMD
       double err_tol=0.00000001; //1e-8
 
     public:
-      explicit Sphdrug(const ActionOptions &);
+      explicit Ghostprobe(const ActionOptions &);
       // active methods:
       void calculate() override;
       void reset();
@@ -124,9 +124,9 @@ namespace PLMD
       static void registerKeywords(Keywords &keys);
     };
 
-    PLUMED_REGISTER_ACTION(Sphdrug, "SPHDRUG")
+    PLUMED_REGISTER_ACTION(Ghostprobe, "GHOSTPROBE")
 
-    void Sphdrug::registerKeywords(Keywords &keys)
+    void Ghostprobe::registerKeywords(Keywords &keys)
     {
       Colvar::registerKeywords(keys);
       keys.addFlag("DEBUG", false, "Running in debug mode");
@@ -151,7 +151,7 @@ namespace PLMD
       keys.add("optional", "PERTSTRIDE", "");
     }
 
-    Sphdrug::Sphdrug(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
+    Ghostprobe::Ghostprobe(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
                                                 pbc(true),
                                                 nocvcalc(false),
                                                 noupdate(false),
@@ -166,7 +166,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       nthreads = omp_get_num_threads();
       ndev = omp_get_num_devices();
       cout << "------------ Available Computing Resources -------------" << endl;
-      cout << "Sphdrug initialised with " << nthreads << " OMP threads " << endl;
+      cout << "Ghostprobe initialised with " << nthreads << " OMP threads " << endl;
       cout << "and " << ndev << " OMP compatible accelerators (not currently used)" << endl;
 
       addValueWithDerivatives();
@@ -209,7 +209,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       cout << "Requesting " << n_atoms << " atoms" << endl;
       requestAtoms(atoms);
-      cout << "--------- Initialising Sphdrug Collective Variable -----------" << endl;
+      cout << "--------- Initialising Ghostprobe Collective Variable -----------" << endl;
 
       parse("NPROBES", nprobes);
       if (!nprobes)
@@ -306,18 +306,18 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       atoms_y = vector<double>(n_atoms, 0);
       atoms_z = vector<double>(n_atoms, 0);
 
-      cout << "---------Initialisng Sphdrug and its derivatives---------" << endl;
-      sphdrug = 0;
-      d_Sphdrug_dx = vector<double>(n_atoms, 0);
-      d_Sphdrug_dy = vector<double>(n_atoms, 0);
-      d_Sphdrug_dz = vector<double>(n_atoms, 0);
+      cout << "---------Initialisng Ghostprobe and its derivatives---------" << endl;
+      ghostprobe = 0;
+      d_Ghostprobe_dx = vector<double>(n_atoms, 0);
+      d_Ghostprobe_dy = vector<double>(n_atoms, 0);
+      d_Ghostprobe_dz = vector<double>(n_atoms, 0);
 
       if (nocvcalc)
          cout << "WARNING: NOCVCALC flag has been included. CV will NOT be calculated." << endl;
 
       if (!nodxfix)
       {
-        cout << "---------Initialisng correction of Sphdrug derivatives---------" << endl;
+        cout << "---------Initialisng correction of Ghostprobe derivatives---------" << endl;
 
         // L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
         nrows = 6;
@@ -331,7 +331,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
       else
       {
-        cout << "Sphdrug derivatives are not going to be corrected" << endl;
+        cout << "Ghostprobe derivatives are not going to be corrected" << endl;
         cout << "Use the NODXFIX flag with care, as this means that" << endl;
         cout << "the sum of forces in the system will not be zero" << endl;
       }
@@ -339,13 +339,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "--------- Initialisation complete -----------" << endl;
     }
 
-    // reset Sphdrug and derivatives to 0
-    void Sphdrug::reset()
+    // reset Ghostprobe and derivatives to 0
+    void Ghostprobe::reset()
     {
-      sphdrug = 0;
-      fill(d_Sphdrug_dx.begin(), d_Sphdrug_dx.end(), 0);
-      fill(d_Sphdrug_dy.begin(), d_Sphdrug_dy.end(), 0);
-      fill(d_Sphdrug_dz.begin(), d_Sphdrug_dz.end(), 0);
+      ghostprobe = 0;
+      fill(d_Ghostprobe_dx.begin(), d_Ghostprobe_dx.end(), 0);
+      fill(d_Ghostprobe_dy.begin(), d_Ghostprobe_dy.end(), 0);
+      fill(d_Ghostprobe_dz.begin(), d_Ghostprobe_dz.end(), 0);
 
       sum_d_dx = 0;
       sum_d_dy = 0;
@@ -359,20 +359,20 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(sum_rcrossP.begin(), sum_rcrossP.end(), 0);
     }
 
-    void Sphdrug::correct_derivatives()
+    void Ghostprobe::correct_derivatives()
     {
       
       // auto point0=high_resolution_clock::now();
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        sum_d_dx += d_Sphdrug_dx[j];
-        sum_d_dy += d_Sphdrug_dy[j];
-        sum_d_dz += d_Sphdrug_dz[j];
+        sum_d_dx += d_Ghostprobe_dx[j];
+        sum_d_dy += d_Ghostprobe_dy[j];
+        sum_d_dz += d_Ghostprobe_dz[j];
 
-        sum_t_dx += atoms_y[j] * d_Sphdrug_dz[j] - atoms_z[j] * d_Sphdrug_dy[j];
-        sum_t_dy += atoms_z[j] * d_Sphdrug_dx[j] - atoms_x[j] * d_Sphdrug_dz[j];
-        sum_t_dz += atoms_x[j] * d_Sphdrug_dy[j] - atoms_y[j] * d_Sphdrug_dx[j];
+        sum_t_dx += atoms_y[j] * d_Ghostprobe_dz[j] - atoms_z[j] * d_Ghostprobe_dy[j];
+        sum_t_dy += atoms_z[j] * d_Ghostprobe_dx[j] - atoms_x[j] * d_Ghostprobe_dz[j];
+        sum_t_dz += atoms_x[j] * d_Ghostprobe_dy[j] - atoms_y[j] * d_Ghostprobe_dx[j];
       }
       L[0] = -sum_d_dx;
       L[1] = -sum_d_dy;
@@ -442,9 +442,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        d_Sphdrug_dx[j] += P[j + 0 * n_atoms];
-        d_Sphdrug_dy[j] += P[j + 1 * n_atoms];
-        d_Sphdrug_dz[j] += P[j + 2 * n_atoms];
+        d_Ghostprobe_dx[j] += P[j + 0 * n_atoms];
+        d_Ghostprobe_dy[j] += P[j + 1 * n_atoms];
+        d_Ghostprobe_dz[j] += P[j + 2 * n_atoms];
       }
       // auto point5=high_resolution_clock::now();
 
@@ -459,13 +459,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       for (unsigned j=0;j<n_atoms;j++)
       {
-       sum_d_dx+=d_Sphdrug_dx[j];
-       sum_d_dy+=d_Sphdrug_dy[j];
-       sum_d_dz+=d_Sphdrug_dz[j];
+       sum_d_dx+=d_Ghostprobe_dx[j];
+       sum_d_dy+=d_Ghostprobe_dy[j];
+       sum_d_dz+=d_Ghostprobe_dz[j];
 
-       sum_t_dx+=atoms_y[j]*d_Sphdrug_dz[j]-atoms_z[j]*d_Sphdrug_dy[j];
-       sum_t_dy+=atoms_z[j]*d_Sphdrug_dx[j]-atoms_x[j]*d_Sphdrug_dz[j];
-       sum_t_dz+=atoms_x[j]*d_Sphdrug_dy[j]-atoms_y[j]*d_Sphdrug_dx[j];
+       sum_t_dx+=atoms_y[j]*d_Ghostprobe_dz[j]-atoms_z[j]*d_Ghostprobe_dy[j];
+       sum_t_dy+=atoms_z[j]*d_Ghostprobe_dx[j]-atoms_x[j]*d_Ghostprobe_dz[j];
+       sum_t_dz+=atoms_x[j]*d_Ghostprobe_dy[j]-atoms_y[j]*d_Ghostprobe_dx[j];
       }
 
       if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
@@ -495,7 +495,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       */
     }
 
-    void Sphdrug::print_protein()
+    void Ghostprobe::print_protein()
     {
      string filename = "protein.xyz";
      ofstream wfile;
@@ -517,7 +517,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     }
 
     // calculator
-    void Sphdrug::calculate()
+    void Ghostprobe::calculate()
     {
       //arma::arma_version ver;
       //cout << ver.as_string() << endl;
@@ -561,12 +561,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
-          sphdrug+=probes[i].activity/nprobes;
+          ghostprobe+=probes[i].activity/nprobes;
           for (unsigned j=0;j<n_atoms;j++)
           {
-            d_Sphdrug_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
-            d_Sphdrug_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
-            d_Sphdrug_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+            d_Ghostprobe_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
+            d_Ghostprobe_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
+            d_Ghostprobe_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
         
@@ -579,10 +579,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        correct_derivatives();
       }
    
-      setValue(sphdrug);
+      setValue(ghostprobe);
       for (unsigned j=0;j<n_atoms;j++)
       {
-        setAtomsDerivatives(j,Vector(d_Sphdrug_dx[j],d_Sphdrug_dy[j],d_Sphdrug_dz[j]));
+        setAtomsDerivatives(j,Vector(d_Ghostprobe_dx[j],d_Ghostprobe_dy[j],d_Ghostprobe_dz[j]));
       }
 
       //print output for post_processing
