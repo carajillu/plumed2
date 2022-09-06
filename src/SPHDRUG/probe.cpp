@@ -18,10 +18,9 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert, unsigned Init_j, double Max_r_init)
+Probe::Probe(unsigned Probe_id, double CCMin, double CCMax, double DeltaCC, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert, unsigned Init_j)
 {
   init_j=Init_j;
-  max_r_init=Max_r_init;
   probe_id=Probe_id;
   dxcalc=true;
   n_atoms=N_atoms;
@@ -134,7 +133,7 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
   Psi=0;
   double r=INFINITY;
 
-  while (Psi<0.0000000001 or r>max_r_init)
+  while (Psi<0.0000000001)
   {
     xyz=xyz0;
     calc_pert();

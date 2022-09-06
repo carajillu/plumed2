@@ -92,7 +92,6 @@ class Probe
   vector<double> xyz_pert;
   vector<double> xyz0;
   unsigned ptries;
-  double max_r_init;
   void calc_pert();
 
  public:
@@ -101,7 +100,7 @@ class Probe
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
           unsigned N_atoms, double kpert, 
-          unsigned init_j, double max_r_init);
+          unsigned init_j);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);

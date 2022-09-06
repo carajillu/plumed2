@@ -60,7 +60,6 @@ namespace PLMD
       bool noupdate;
       double kpert=0;
       unsigned pertstride=0;
-      double max_r_init=INFINITY;
 
       // Parameters
       double CCmin=0;          // mind below which an atom is considered to be clashing with the probe
@@ -149,7 +148,6 @@ namespace PLMD
       keys.add("optional", "PSIMIN", "");
       keys.add("optional", "DELTAPSI", "");
       keys.add("optional", "KPERT", "");
-      keys.add("optional", "MAX_R_INIT", "");
       keys.add("optional", "PERTSTRIDE", "");
     }
 
@@ -281,25 +279,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << endl;
 
       parse("PERTSTRIDE",pertstride);
-      parse("MAX_R_INIT",max_r_init);
-      
       if (!pertstride)  
           pertstride=100;
       cout << "PERTSTRIDE = " << pertstride << endl;
       cout << "Probe will be perturbed every " << pertstride << " steps";
       cout << endl;  
-        
-      if (!max_r_init)
-         max_r_init=INFINITY;
-      cout << "probe will not be allowed to drift further than " << max_r_init << " nm from the atom it has been initialised on" << endl;
       
-
-
-
       for (unsigned i = 0; i < nprobes; i++)
       {
-        double max_r_init=0.5;
-        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert,init_j[i],max_r_init));
+        probes.push_back(Probe(i,CCmin, CCmax, deltaCC, phimin, deltaphi, psimin, deltapsi, n_atoms, kpert,init_j[i]));
         cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
       }
 
