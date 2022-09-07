@@ -55,7 +55,7 @@
 !/s2cm
 !/pytorch
 !/membranefusion
-
+!/GHOSTPROBE
 # And just ignore these files
 *.xxd
 /*.on
