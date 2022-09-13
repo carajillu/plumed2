@@ -13,8 +13,9 @@ class Probe
   //parameters
   unsigned n_atoms;
   double Rmin; // mind below which an atom is considered to be clashing with the probe 
+  double deltaRmin; // interval over which contact terms are turned on and off
   double Rmax; // distance above which an atom is considered to be too far away from the probe*
-  double deltaR; // interval over which contact terms are turned on and off
+  double deltaRmax; // interval over which contact terms are turned on and off
   double Cmin; // packing factor below which depth term equals 0
   double deltaC; // interval over which depth term turns from 0 to 1
   double Pmin; // packing factor below which depth term equals 0
@@ -96,7 +97,8 @@ class Probe
 
  public:
     Probe(unsigned Probe_id, 
-          double RMin, double RMax, double DeltaR, 
+          double RMin, double DeltaRmin, 
+          double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
           unsigned N_atoms, double kpert, 

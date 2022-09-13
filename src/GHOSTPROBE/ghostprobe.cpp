@@ -63,8 +63,9 @@ namespace PLMD
 
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
+      double deltaRmin=0;        // interval over which contact terms are turned on and off
       double Rmax=0;          // distance above which an atom is considered to be too far away from the probe*
-      double deltaR=0;        // interval over which contact terms are turned on and off
+      double deltaRmax=0;        // interval over which contact terms are turned on and off
       double Pmin=0;           // packing factor below which depth term equals 0
       double deltaP=0;         // interval over which depth term turns from 0 to 1
       double Cmin=0;           // packing factor below which depth term equals 0
@@ -122,6 +123,7 @@ namespace PLMD
       void correct_derivatives();
       void print_protein();
       static void registerKeywords(Keywords &keys);
+      void get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
     };
 
     PLUMED_REGISTER_ACTION(Ghostprobe, "GHOSTPROBE")
@@ -141,8 +143,9 @@ namespace PLMD
       keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
       keys.add("optional", "RMIN", "");
+      keys.add("optional", "DELTARMIN", "");
       keys.add("optional", "RMAX", "");
-      keys.add("optional", "DELTAR", "");
+      keys.add("optional", "DELTARMAX", "");
       keys.add("optional", "CMIN", "");
       keys.add("optional", "DELTAC", "");
       keys.add("optional", "PMIN", "");
@@ -187,53 +190,48 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       n_atoms = atoms.size();
       n_init = atoms_init.size();
 
-      //The following bit checks if ATOMS_INIT are already in ATOMS.
-      //Those that are are not requested twice.
-      for (unsigned k = 0; k < atoms_init.size(); k++)
-      {
-        for (unsigned j=0; j<atoms.size(); j++)
-        {
-          if (atoms_init[k]==atoms[j])
-          {
-           init_j.push_back(j);
-           break; 
-          }
-          if (j==(atoms.size()-1))
-          {
-            cout << "Atom " << atoms_init[k].serial() << " not found in ATOMS. Exiting." << endl;
-            atoms.push_back(atoms_init[k]);
-            init_j.push_back(n_atoms+1);
-          }
-        }
-      }
-
-      cout << "Requesting " << n_atoms << " atoms" << endl;
-      requestAtoms(atoms);
-      cout << "--------- Initialising Ghostprobe Collective Variable -----------" << endl;
-
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
         nprobes = 16;
       }
-
-      if (nprobes != atoms_init.size() and atoms_init.size() > 0)
+      //The following bit checks if ATOMS_INIT are already in ATOMS.
+      //Those that are are not requested twice.
+      if (atoms_init.size()>0)
       {
-        cout << "Overriding NPROBES with the length of ATOMS_INIT" << endl;
-        nprobes = atoms_init.size();
-      }
-
-      if (atoms_init.size() == 0)
-      {
-        for (unsigned i = 0; i < nprobes; i++)
+        for (unsigned k = 0; k < n_init; k++)
         {
-          random_device rd;                                   // only used once to initialise (seed) engine
-          mt19937 rng(rd());                                  // random-number engine used (Mersenne-Twister in this case)
-          uniform_int_distribution<unsigned> uni(0, n_atoms); // guaranteed unbiased
-          auto random_integer = uni(rng);
-          init_j.push_back(random_integer);
+          for (unsigned j=0; j<n_atoms; j++)
+          {
+            if (atoms_init[k]==atoms[j])
+            {
+             init_j.push_back(j);
+             break; 
+            }
+            if (j==(n_atoms-1)) // This means we reached the last atom in ATOMS
+            {
+              cout << "Atom " << atoms_init[k].serial() << " not found in ATOMS. Adding it." << endl;
+              atoms.push_back(atoms_init[k]);
+              init_j.push_back(atoms.size()-1);
+            }
+          }
         }
       }
+      else
+      {
+        for (unsigned i=0; i<nprobes; i++)
+        {
+        random_device rd;                                   // only used once to initialise (seed) engine
+        mt19937 rng(rd());                                  // random-number engine used (Mersenne-Twister in this case)
+        uniform_int_distribution<unsigned> uni(0, n_atoms); // guaranteed unbiased
+        auto random_integer = uni(rng);
+        init_j.push_back(random_integer);
+        }
+      }
+
+      cout << "Requesting " << atoms.size() << " atoms" << endl;
+      requestAtoms(atoms);
+      cout << "--------- Initialising Ghostprobe Collective Variable -----------" << endl;
 
       cout << "Using " << nprobes << " spherical probe(s) with the following parameters:" << endl;
 
@@ -242,15 +240,20 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         Rmin = 0.25;
       cout << "Rmin = " << Rmin << " nm" << endl;
 
+      parse("DELTARMIN", deltaRmin);
+      if (!deltaRmin)
+        deltaRmin = 0.15;
+      cout << "deltaRmin = " << deltaRmin << " nm" << endl;
+
       parse("RMAX", Rmax);
       if (!Rmax)
         Rmax = 0.6;
       cout << "Rmax = " << Rmax << " nm" << endl;
 
-      parse("DELTAR", deltaR);
-      if (!deltaR)
-        deltaR = 0.15;
-      cout << "deltaR = " << deltaR << " nm" << endl;
+      parse("DELTARMAX", deltaRmax);
+      if (!deltaRmax)
+        deltaRmax = 0.15;
+      cout << "deltaRmax = " << deltaRmax << " nm" << endl;
 
       parse("CMIN", Cmin);
       if (!Cmin)
@@ -273,22 +276,29 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "DELTAP = " << deltaP << endl;
 
       parse("KPERT",kpert);
-      cout << "KPERT = " << kpert << " nm"; 
-      if (!kpert)
-         cout << " -- POCKET SEARCH WILL NOT BE DONE ";
-      cout << endl;
-
       parse("PERTSTRIDE",pertstride);
-      if (!pertstride)  
-          pertstride=100;
-      cout << "PERTSTRIDE = " << pertstride << endl;
-      cout << "Probe will be perturbed every " << pertstride << " steps";
-      cout << endl;  
+      if (!kpert or !pertstride)
+      {
+        kpert=0.001;
+        pertstride=-1;
+        cout << " KPERT and/or PERTRSTRIDE not set -- POCKET SEARCH WILL NOT BE DONE " << endl;
+      }
+      else
+      {
+        cout << "Probe will be perturbed every " << pertstride << " steps.";
+        cout << "The perturbation will be of " << kpert << " nm." << endl;
+      }
       
       for (unsigned i = 0; i < nprobes; i++)
       {
-        probes.push_back(Probe(i,Rmin, Rmax, deltaR, Cmin, deltaC, Pmin, deltaP, n_atoms, kpert,init_j[i]));
-        cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
+        probes.push_back(Probe(i,
+                               Rmin, deltaRmin, 
+                               Rmax, deltaRmax, 
+                               Cmin, deltaC, 
+                               Pmin, deltaP, 
+                               n_atoms, kpert,
+                               init_j[i]));
+        cout << "Probe " << i << " initialised" << endl;
       }
 
       // parameters used to control output
@@ -516,6 +526,42 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
      wfile.close();
     }
 
+    void Ghostprobe::get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
+    {
+      double x=0;
+      double y=0;
+      double z=0;
+
+      if (atoms_init.size() == 0)
+      {
+        for (unsigned i = 0; i < nprobes; i++)
+        {
+          x=getPosition(init_j[i])[0];
+          y=getPosition(init_j[i])[1];
+          z=getPosition(init_j[i])[2];
+          probes[i].place_probe(x,y,z);
+          probes[i].perturb_probe(0,atoms_x,atoms_y,atoms_z);
+          cout << "Probe " << i << "Centered on atom " << atoms[init_j[i]].serial();
+        }
+      }
+      else
+      {
+       cout << n_atoms << endl;
+       for (unsigned j=0; j<init_j.size();j++)
+       {
+        cout << j << " " << init_j[j] << " " << getPosition(init_j[j])[0]<< " " << getPosition(init_j[j])[1]<< " " << getPosition(init_j[j])[2] <<  endl;
+        x+=getPosition(init_j[j])[0]/init_j.size();
+        y+=getPosition(init_j[j])[1]/init_j.size();
+        z+=getPosition(init_j[j])[2]/init_j.size();
+       }
+       for (unsigned i = 0; i < nprobes; i++)
+       {
+        probes[i].place_probe(x,y,z);
+       }
+       cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
+      }
+    }
+
     // calculator
     void Ghostprobe::calculate()
     {
@@ -536,22 +582,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         atoms_z[j] = getPosition(j)[2];
       }
 
+      if (step==0)
+         get_init_crd(atoms_x,atoms_y,atoms_z);
+
       #pragma omp parallel for
       for (unsigned i = 0; i < nprobes; i++)
       {
-        // set up stuff at step 0
-        if (step == 0)
-        {
-          double x = getPosition(init_j[i])[0];
-          double y = getPosition(init_j[i])[1];
-          double z = getPosition(init_j[i])[2];
-          probes[i].place_probe(x, y, z);
-          if (!nodxfix)  
-              probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
-          else
-              probes[i].place_probe(x+0.1, y+0.1, z+0.1);
-        }
-
         // Update probe coordinates
         if (!noupdate)
         {

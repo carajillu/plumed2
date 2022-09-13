@@ -18,15 +18,22 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, double RMin, double RMax, double DeltaR, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert, unsigned Init_j)
+Probe::Probe(unsigned Probe_id, 
+            double RMin, double DeltaRmin, 
+            double RMax, double DeltaRmax, 
+            double phimin, double deltaphi, 
+            double psimin, double deltapsi, 
+            unsigned N_atoms, double kpert, 
+            unsigned Init_j)
 {
   init_j=Init_j;
   probe_id=Probe_id;
   dxcalc=true;
   n_atoms=N_atoms;
   Rmin=RMin; // mind below which an atom is considered to be clashing with the probe 
+  deltaRmin=DeltaRmin; // interval over which contact terms are turned on and off
   Rmax=RMax; // distance above which an atom is considered to be too far away from the probe*
-  deltaR=DeltaR; // interval over which contact terms are turned on and off
+  deltaRmax=DeltaRmax; // interval over which contact terms are turned on and off
   Cmin=phimin; 
   deltaC=deltaphi;
   Pmin=psimin; 
@@ -141,7 +148,7 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
     calculate_enclosure();
     r=sqrt((pow((xyz[0]-atoms_x[init_j]),2))+(pow((xyz[1]-atoms_y[init_j]),2))+(pow((xyz[2]-atoms_z[init_j]),2)));
     ptries++;
-    if (ptries > 1000) 
+    if (ptries > 10000) 
     {
       cout << "Step " << step << ": probe " << probe_id << " could not be settled after " << ptries << " perturbation trials." << endl;
       cout << "enclosure    clash    activity    Ptries" << endl;
@@ -151,7 +158,7 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
       xyz=xyz0;
       break;
     }
-  }    
+  }
   activity_old=activity_cum;
   activity_cum=0;
   dxcalc=true; //switch derivatives calculation back on
@@ -190,7 +197,7 @@ void Probe::calculate_enclosure()
  total_enclosure=0;
  for (unsigned j=0; j<n_atoms; j++)
  {
-  if (r[j] >= (Rmax+deltaR))
+  if (r[j] >= (Rmax+deltaRmax))
   {
    enclosure[j]=0;
    d_enclosure_dx[j]=0;
@@ -199,8 +206,8 @@ void Probe::calculate_enclosure()
    continue;
   }
 
-  double m_r=COREFUNCTIONS::m_v(r[j],Rmax,deltaR);
-  double dm_dr=COREFUNCTIONS::dm_dv(deltaR);
+  double m_r=COREFUNCTIONS::m_v(r[j],Rmax,deltaRmax);
+  double dm_dr=COREFUNCTIONS::dm_dv(deltaRmax);
 
   enclosure[j]=COREFUNCTIONS::Soff_m(m_r,1);
   if (dxcalc)
@@ -235,7 +242,7 @@ void Probe::calculate_clash()
  total_clash=0; 
  for (unsigned j=0; j<n_atoms; j++)
  {
-  if (r[j] >= Rmin+deltaR)
+  if (r[j] >= Rmin+deltaRmin)
   {
    clash[j]=0;
    d_clash_dx[j]=0;
@@ -243,8 +250,8 @@ void Probe::calculate_clash()
    d_clash_dz[j]=0;
    continue;
   }
-  double m_r=COREFUNCTIONS::m_v(r[j],Rmin,deltaR);
-  double dm_dr=COREFUNCTIONS::dm_dv(deltaR);
+  double m_r=COREFUNCTIONS::m_v(r[j],Rmin,deltaRmin);
+  double dm_dr=COREFUNCTIONS::dm_dv(deltaRmin);
 
   clash[j]=COREFUNCTIONS::Soff_m(m_r,1);
   if (dxcalc)
