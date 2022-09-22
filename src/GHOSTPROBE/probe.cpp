@@ -142,22 +142,25 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
 
   while (total_enclosure<Pmin)
   {
-    xyz=xyz0;
-    calc_pert();
-    calculate_r(atoms_x,atoms_y,atoms_z);
-    calculate_enclosure();
-    r=sqrt((pow((xyz[0]-atoms_x[init_j]),2))+(pow((xyz[1]-atoms_y[init_j]),2))+(pow((xyz[2]-atoms_z[init_j]),2)));
-    ptries++;
-    if (ptries > 10000) 
+    if (ptries == 10000) 
     {
       cout << "Step " << step << ": probe " << probe_id << " could not be settled after " << ptries << " perturbation trials." << endl;
       cout << "enclosure    clash    activity    Ptries" << endl;
       cout << total_enclosure << "    " << total_clash << "    " << activity << "    " << ptries << endl;
       //cout << "Simulation will now terminate" << endl;
       //exit(0);
-      xyz=xyz0;
+      xyz[0]=atoms_x[j_min_r];
+      xyz[0]=atoms_x[j_min_r];
+      xyz[0]=atoms_x[j_min_r];
+      calc_pert();
       break;
     }
+    xyz=xyz0;
+    calc_pert();
+    calculate_r(atoms_x,atoms_y,atoms_z);
+    calculate_enclosure();
+    r=sqrt((pow((xyz[0]-atoms_x[init_j]),2))+(pow((xyz[1]-atoms_y[init_j]),2))+(pow((xyz[2]-atoms_z[init_j]),2)));
+    ptries++;
   }
   activity_old=activity_cum;
   activity_cum=0;
