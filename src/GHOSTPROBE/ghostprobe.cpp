@@ -237,7 +237,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("RMIN", Rmin);
       if (!Rmin)
-        Rmin = 0.25;
+        Rmin = 0.;
       cout << "Rmin = " << Rmin << " nm" << endl;
 
       parse("DELTARMIN", deltaRmin);
@@ -257,7 +257,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("CMIN", Cmin);
       if (!Cmin)
-        Cmin = 0; // obtained from generating 10000 random points in VHL's crystal structure
+        Cmin = 0.; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "CMIN = " << Cmin << endl;
 
       parse("DELTAC", deltaC);
@@ -541,7 +541,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           z=getPosition(init_j[i])[2];
           probes[i].place_probe(x,y,z);
           probes[i].perturb_probe(0,atoms_x,atoms_y,atoms_z);
-          cout << "Probe " << i << "Centered on atom " << atoms[init_j[i]].serial();
+          cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
         }
       }
       else
