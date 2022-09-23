@@ -546,10 +546,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
       else
       {
-       cout << n_atoms << endl;
+       //cout << n_atoms << endl;
        for (unsigned j=0; j<init_j.size();j++)
        {
-        cout << j << " " << init_j[j] << " " << getPosition(init_j[j])[0]<< " " << getPosition(init_j[j])[1]<< " " << getPosition(init_j[j])[2] <<  endl;
+        //cout << j << " " << init_j[j] << " " << getPosition(init_j[j])[0]<< " " << getPosition(init_j[j])[1]<< " " << getPosition(init_j[j])[2] <<  endl;
         x+=getPosition(init_j[j])[0]/init_j.size();
         y+=getPosition(init_j[j])[1]/init_j.size();
         z+=getPosition(init_j[j])[2]/init_j.size();
@@ -558,7 +558,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        {
         probes[i].place_probe(x,y,z);
        }
-       cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
+       //cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
       }
     }
 
@@ -592,6 +592,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
+        }
+        else
+        {
+          get_init_crd(atoms_x,atoms_y,atoms_z);
         }
 
         if (!nocvcalc)
@@ -629,12 +633,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
          {
           // Get coordinates of the reference atom
           unsigned j = init_j[i];
-
-          double ref_x = getPosition(j)[0];
-          double ref_y = getPosition(j)[1];
-          double ref_z = getPosition(j)[2];
           probes[i].print_probe_xyz(i, step);
-          probes[i].print_probe_movement(i, step, atoms, n_atoms, ref_x, ref_y, ref_z);
+          probes[i].print_probe_movement(i, step, atoms, n_atoms);
          }
        }
       

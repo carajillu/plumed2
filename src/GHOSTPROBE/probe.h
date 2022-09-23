@@ -122,7 +122,7 @@ class Probe
     vector<double> d_activity_dz;
     void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
-    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z);
+    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);
     void print_probe_xyz(int id, int step);
 
 };

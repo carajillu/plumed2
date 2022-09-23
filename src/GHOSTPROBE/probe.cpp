@@ -376,9 +376,8 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
-void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)
+void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
 {
-  double r=sqrt((pow((xyz[0]-ref_x),2))+(pow((xyz[1]-ref_y),2))+(pow((xyz[2]-ref_z),2)));
   string filename = "probe-";
   filename.append(to_string(id));
   //filename.append("-step-");
@@ -388,7 +387,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step Dref min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
+   wfile << "Step min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -397,7 +396,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << atoms[j_min_r].serial() << " " << min_r << " " 
+  wfile << step << " " << atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
         << activity << " " << activity_cum << " " << activity_old << " "
