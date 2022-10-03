@@ -574,7 +574,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       reset();
 
       step = getStep();
-      //#pragma omp parallel for //?
+      
+      // Get atom positions
       for (unsigned j = 0; j < n_atoms; j++)
       {
         atoms_x[j] = getPosition(j)[0];
@@ -582,6 +583,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         atoms_z[j] = getPosition(j)[2];
       }
 
+      // At step 0, place the probes using get_init_crd()
       if (step==0)
          get_init_crd(atoms_x,atoms_y,atoms_z);
 
@@ -597,7 +599,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         {
           get_init_crd(atoms_x,atoms_y,atoms_z);
         }
-
+        
+        // Check if a perturbation is required (and do it if it is)
+        if (step%pertstride==0 and step>0 and (!nodxfix))
+           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+        
+        //Calculate Psi and its derivatives
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
@@ -609,16 +616,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             d_Psi_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
-        
-        if (step%pertstride==0 and step>0 and (!nodxfix))
-           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
       }
 
+      //Correct the Psi derivatives so that they sum 0
       if (!nodxfix)
       {
        correct_derivatives();
       }
    
+      //Send Psi and derivatives back to Plumed
       setValue(Psi);
       for (unsigned j=0;j<n_atoms;j++)
       {
