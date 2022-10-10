@@ -5,7 +5,8 @@
 #include <string>
 #include <random>
 #include <iterator>
-#include <armadillo> 
+#include <armadillo>
+#include "aidefunctions.h"
 //you can disable bonds check at compile time with the flag -DARMA_NO_DEBUG (makes matrix multiplication 40%ish faster).
 
 #include "core/ActionAtomistic.h"
@@ -39,6 +40,8 @@ Probe::Probe(unsigned Probe_id,
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
+  //
+  r_target=INFINITY;
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -133,10 +136,11 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
    ptries=0;
    return;
   }
-
   dxcalc=false; // switch off derivatives calculation during the perturbation trials
   xyz0=xyz;
   ptries=0;
+  total_enclosure=0;
+  total_clash=INFINITY;
 
   while (total_enclosure<Pmin or total_clash>(Cmin+deltaC))
   {
@@ -374,8 +378,9 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
-void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
+void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
 {
+  r_target=sqrt(pow((xyz[0]-target_xyz[0]),2)+pow((xyz[1]-target_xyz[1]),2)+pow((xyz[2]-target_xyz[2]),2));
   string filename = "probe-";
   filename.append(to_string(id));
   //filename.append("-step-");
@@ -385,7 +390,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.open(filename.c_str(),std::ios_base::app);
   if (step==0)
   {
-   wfile << "Step min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
+   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
   }
   /*
   for (unsigned j=0; j<n_atoms; j++)
@@ -394,7 +399,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << atoms[j_min_r].serial() << " " << min_r << " " 
+  wfile << probe_id << " " << step << " " << r_target << " "<< atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
         << activity << " " << activity_cum << " " << activity_old << " "

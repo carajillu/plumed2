@@ -113,17 +113,13 @@ class Probe
     double activity;
     double activity_cum; // cummulative activity over PERTSTRIDE steps
     double activity_old; // cummulative activity over the last period 
-    double pert_accepted;
-    double pert_rejected;
-    double pert_acceptance;
-    string accepted;
+    double r_target; //distance between the probe and the target region (if not specified, r_target=INFINITY)
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
     void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
-    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);
+    void print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz);
     void print_probe_xyz(int id, int step);
-
 };
 #endif
