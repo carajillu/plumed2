@@ -30,6 +30,7 @@
 #include <chrono>
 #include <armadillo>
 #include <omp.h>
+#include "aidefunctions.h"
 
 // CV modules
 #include "probe.h"
@@ -82,6 +83,11 @@ namespace PLMD
       vector<PLMD::AtomNumber> atoms_init; // Indices of the atoms in which the probes will be initially centered
       unsigned n_init=0;                     // number of atoms used in ATOMS_INIT
       vector<unsigned> init_j;             // Indices of atoms_init in getPositions()
+
+      vector<PLMD::AtomNumber> atoms_target; // Indices of the atoms defining target region
+      unsigned n_target=0;                     // number of atoms used in ATOMS_TARGET
+      vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
+      vector<double> target_xyz;
 
       vector<Probe> probes; // This will contain all the spherical probes
       unsigned nprobes=0;     // number of spherical probes to use
@@ -139,6 +145,7 @@ namespace PLMD
       keys.addFlag("PERFORMANCE", false, "measure execution time");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
+      keys.add("atoms", "ATOMS_TARGET", "Atoms that define the target region.");
       keys.add("optional", "NPROBES", "Number of probes to use");
       keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
@@ -185,47 +192,77 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("PERFORMANCE", performance);
 
       parseAtomList("ATOMS", atoms);
-      parseAtomList("ATOMS_INIT", atoms_init);
-
       n_atoms = atoms.size();
+
+      parseAtomList("ATOMS_INIT", atoms_init);
       n_init = atoms_init.size();
+
+      parseAtomList("ATOMS_TARGET", atoms_target);
+      n_target = atoms_target.size();
+      target_xyz=vector<double>(3,INFINITY);
 
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
         nprobes = 16;
       }
-      //The following bit checks if ATOMS_INIT are already in ATOMS.
-      //Those that are are not requested twice.
-      if (atoms_init.size()>0)
+      
+      /*
+      The following bit checks if ATOMS_INIT has been specified.
+      If so, all probes will be initialised in the centre of ATOMS_INIT.
+      Otherwise, each probe will be initialised on a protein atom chosen at random.
+      */      
+      if (n_init==0)
       {
-        for (unsigned k = 0; k < n_init; k++)
+        cout << "geting random atoms_init" << endl;
+        for (unsigned i=0; i<nprobes; i++)
         {
-          for (unsigned j=0; j<n_atoms; j++)
-          {
-            if (atoms_init[k]==atoms[j])
-            {
-             init_j.push_back(j);
-             break; 
-            }
-            if (j==(n_atoms-1)) // This means we reached the last atom in ATOMS
-            {
-              cout << "Atom " << atoms_init[k].serial() << " not found in ATOMS. Adding it." << endl;
-              atoms.push_back(atoms_init[k]);
-              init_j.push_back(atoms.size()-1);
-            }
-          }
+          unsigned j_rand=aidefunctions::get_random_integer(0, n_atoms-1);
+          init_j.push_back(j_rand);
+          cout << j_rand << endl;
         }
+        cout << "got random atoms_init" << endl;
       }
       else
       {
-        for (unsigned i=0; i<nprobes; i++)
+        for (unsigned j=0;j<n_init; j++)
         {
-        random_device rd;                                   // only used once to initialise (seed) engine
-        mt19937 rng(rd());                                  // random-number engine used (Mersenne-Twister in this case)
-        uniform_int_distribution<unsigned> uni(0, n_atoms); // guaranteed unbiased
-        auto random_integer = uni(rng);
-        init_j.push_back(random_integer);
+          int j_idx=aidefunctions::findIndex(atoms,atoms_init[j]);
+          if (j_idx==-1)
+          {
+            cout << "Atom " << atoms_init[j].index() << " not found in ATOMS. Adding it." << endl;
+            atoms.push_back(atoms_init[j]);
+            init_j.push_back(atoms.size()-1);
+          }
+          else
+          {
+            init_j.push_back(j_idx);
+          }
+        }
+      }
+    
+    /*
+      The following bit checks if ATOMS_TARGET has been specified.
+      If so, those atoms will be added to vector<PLMD::AtomNumber> atoms
+      */ 
+      
+      if (n_target!=0)
+      {
+        cout << "Target region is defined by atoms: " << endl;
+        for (unsigned j=0;j<n_target; j++)
+        {
+          cout << atoms_target[j].index() << endl;
+          int j_idx=aidefunctions::findIndex(atoms,atoms_target[j]);
+          if (j_idx==-1)
+          {
+            cout << "Atom " << atoms_target[j].index() << " not found in ATOMS or ATOMS_INIT. Adding it." << endl;
+            atoms.push_back(atoms_target[j]);
+            target_j.push_back(atoms.size()-1);
+          }
+          else
+          {
+            target_j.push_back(j_idx);
+          }
         }
       }
 
@@ -635,12 +672,25 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        if (step % probestride == 0)
        {
          print_protein();
+         if (n_target!=0)
+         {
+          target_xyz[0]=0;
+          target_xyz[1]=0;
+          target_xyz[2]=0;
+          for (unsigned j=0; j<n_target; j++)
+          {
+            target_xyz[0]+=getPosition(target_j[j])[0]/n_target;
+            target_xyz[1]+=getPosition(target_j[j])[1]/n_target;
+            target_xyz[2]+=getPosition(target_j[j])[2]/n_target;
+          }
+         }
+
          for (unsigned i=0; i<nprobes;i++)
          {
           // Get coordinates of the reference atom
           unsigned j = init_j[i];
           probes[i].print_probe_xyz(i, step);
-          probes[i].print_probe_movement(i, step, atoms, n_atoms);
+          probes[i].print_probe_movement(i, step, atoms, n_atoms, target_xyz);
          }
        }
       
