@@ -114,12 +114,17 @@ if __name__=="__main__":
     newtraj=stack_traj(subset,probes_trj)
     newtraj=newtraj.superpose(reference=newtraj[0],atom_indices=newtraj.topology.select("backbone"))
     #export
-    newtraj[0].save_gro(args.output+".gro")
-    newtraj.save_xtc(args.output+".xtc")
-
-    prot_traj=newtraj.atom_slice(newtraj.topology.select("not resname PRB"))
-    prot_traj[0].save_gro("protein.gro")
-    prot_traj.save_xtc("protein.xtc")
+    try:
+       newtraj[0].save_gro(args.output+".gro")
+       newtraj.save_xtc(args.output+".xtc")
+    except:
+        print(args.output, "could not be saved")
+    try:
+        prot_traj=newtraj.atom_slice(newtraj.topology.select("not resname PRB"))
+        prot_traj[0].save_gro("protein.gro")
+        prot_traj.save_xtc("protein.xtc")
+    except:
+        print("protein traj could not be saved")
     
     probes_trj=newtraj.atom_slice(newtraj.topology.select("resname PRB"))
     activity=get_activity(args.nprobes)

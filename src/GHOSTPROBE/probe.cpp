@@ -129,7 +129,7 @@ void Probe::calc_pert()
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
   //if no perturbation is needed, just update data and leave
-  if ((((activity_cum-activity_old)>0.01) and step>0))
+  if ((activity_cum>activity_old) and step>0)
   {
    activity_old=activity_cum;
    activity_cum=0;
