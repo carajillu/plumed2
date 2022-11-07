@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import mdtraj
 import glob
+import sys
 
 #default line
 defline="""GHOSTPROBE ...
@@ -46,7 +47,7 @@ def getATOMS(gro,selection):
 
 def calculate_distance_matrix(xyzmat):
     distmat=np.zeros((len(xyzmat),len(xyzmat)),dtype=np.float64)
-    print(type(distmat))
+    #print(type(distmat))
     for i in range(0,len(xyzmat)):
         for j in range(i,len(xyzmat)):
             if (j==i):
@@ -89,7 +90,7 @@ def laio(id,names,distmat,d0,delta_min):
         rhodelta.delta[i]=delta_i
     
     #choose cluster centers
-    print(rhodelta.sort_values("delta",ascending=False)[0:50])
+    #print(rhodelta.sort_values("delta",ascending=False)[0:50])
     
     
 
@@ -133,7 +134,7 @@ def find_unique_atoms(regex,activity_min):
     
     z=z[z.activity>=activity_min]
     atoms_id=np.sort(z.min_r_serial.unique())
-    print(atoms_id)
+    #print(atoms_id)
     return atoms_id
 
 def get_atom_crd(gro,atoms_id):
@@ -146,24 +147,34 @@ def get_atom_crd(gro,atoms_id):
         names.append(grobj.topology.atom(mdtraj_id))
     
     crd=np.array(crd)
-    print(crd)
+    #print(crd)
     return crd, names
 
 def print_clusters(rhodelta,min_elements):
     lines=[]
     clusters=rhodelta.cluster.unique()
+    rhodeltaclust_lst=[]
     for cluster_id in clusters:
-        if (len(rhodelta[rhodelta.cluster==cluster_id])>=min_elements):
-           filename="cluster_"+str(cluster_id)+".csv"
-           rhodelta[rhodelta.cluster==cluster_id].to_csv(filename,sep=" ")
-           line="ATOMS_INIT="+",".join(rhodelta[rhodelta.cluster==cluster_id].astype({"ID":str}).ID)
+        rhodeltaclust=rhodelta[rhodelta.cluster==cluster_id]
+        rhodeltaclust_lst.append(rhodeltaclust)
+    rhodeltaclust_lst.sort(key=len, reverse=True)
+    for i in range(0,len(rhodeltaclust_lst)):
+        rhodeltaclust=rhodeltaclust_lst[i]
+        print(rhodeltaclust)
+        print(len(rhodeltaclust.point))
+        print("---------------------")
+        if (len(rhodeltaclust)>=min_elements):
+           filename="cluster_"+str(i)+".csv"
+           rhodeltaclust.to_csv(filename,sep=" ")
+           line="ATOMS_INIT="+",".join(rhodeltaclust.astype({"ID":str}).ID)
            lines.append(line)
+    #sys.exit()
     return lines
 
 def build_plumedat(defline,ATOMS,lines):
     defline=defline+ATOMS+"\n"
     if len(lines)>0:
-       lines=list(sorted(lines,key=len,reverse=True))
+       #lines=list(sorted(lines,key=len,reverse=True))
        for i in range(0,len(lines)):
          name="plumed_"+str(i)+".dat"
          fileout=open(name,"w")
