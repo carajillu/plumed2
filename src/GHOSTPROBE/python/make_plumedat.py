@@ -162,6 +162,12 @@ def print_clusters(rhodelta,min_elements):
         rhodeltaclust=rhodeltaclust_lst[i]
         print(rhodeltaclust)
         print(len(rhodeltaclust.point))
+        residues=[]
+        for atom in rhodeltaclust.Name:
+            resid="resid "+str(atom.residue)[3:]
+            if resid not in residues:
+                residues.append(resid)
+        print (" or ".join(residues))
         print("---------------------")
         if (len(rhodeltaclust)>=min_elements):
            filename="cluster_"+str(i)+".csv"
@@ -174,7 +180,6 @@ def print_clusters(rhodelta,min_elements):
 def build_plumedat(defline,ATOMS,lines):
     defline=defline+ATOMS+"\n"
     if len(lines)>0:
-       #lines=list(sorted(lines,key=len,reverse=True))
        for i in range(0,len(lines)):
          name="plumed_"+str(i)+".dat"
          fileout=open(name,"w")
