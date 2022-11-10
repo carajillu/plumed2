@@ -111,8 +111,7 @@ class Probe
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
     double activity;
-    double activity_cum; // cummulative activity over PERTSTRIDE steps
-    double activity_old; // cummulative activity over the last period 
+    double activity_0; // activity at step n-1 
     double r_target; //distance between the probe and the target region (if not specified, r_target=INFINITY)
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;

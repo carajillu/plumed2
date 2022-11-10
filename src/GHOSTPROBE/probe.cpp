@@ -3,7 +3,6 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <random>
 #include <iterator>
 #include <armadillo>
 #include "aidefunctions.h"
@@ -82,6 +81,8 @@ Probe::Probe(unsigned Probe_id,
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
 
+  activity=0;
+  activity_0=0;
   d_activity_dx=vector<double>(n_atoms,0);
   d_activity_dy=vector<double>(n_atoms,0);
   d_activity_dz=vector<double>(n_atoms,0);
@@ -106,14 +107,9 @@ void Probe::place_probe(double x, double y, double z)
 
 void Probe::calc_pert()
 {
-  random_device rd;  // only used once to initialise (seed) engine
-  mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
-
-  for (unsigned i=0; i<3;i++)
+ for (unsigned i=0; i<3;i++)
   {
-   uniform_real_distribution<double> uni(-1, 1); // guaranteed unbiased
-   auto random_double = uni(rng);
-   xyz_pert[i]=random_double;
+   xyz_pert[i]=random_double(-1,1);
   }
   double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
   double k=Kpert/norm;
@@ -128,45 +124,55 @@ void Probe::calc_pert()
 
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
-  //if no perturbation is needed, just update data and leave
-  if ((activity_cum>activity_old) and step>0)
-  {
-   activity_old=activity_cum;
-   activity_cum=0;
-   ptries=0;
-   return;
-  }
   dxcalc=false; // switch off derivatives calculation during the perturbation trials
-  xyz0=xyz;
-  ptries=0;
-  total_enclosure=0;
-  total_clash=INFINITY;
-
-  while (total_enclosure<Pmin or total_clash>(Cmin+deltaC))
+  activity_0=activity;
+  calculate_activity(atoms_x,atoms_y,atoms_z);
+  if (activity>activity_0)
   {
-    if (ptries == 10000) 
-    {
-      cout << endl <<"Step " << step << ": probe " << probe_id << " could not be settled after " << ptries << " perturbation trials." << endl;
-      cout << "enclosure    clash      Ptries" << endl;
-      cout << total_enclosure << "    " << total_clash <<"    " << ptries << endl;
-      //cout << "Simulation will now terminate" << endl;
-      //exit(0);
-      xyz[0]=atoms_x[j_min_r];
-      xyz[1]=atoms_y[j_min_r];
-      xyz[2]=atoms_z[j_min_r];
-      calc_pert();
-      break;
-    }
-    xyz=xyz0;
-    calc_pert();
-    calculate_r(atoms_x,atoms_y,atoms_z);
-    calculate_clash();
-    calculate_enclosure();
-    ptries++;
+     dxcalc=true;
+     return;
   }
-  activity_old=activity_cum;
-  activity_cum=0;
-  dxcalc=true; //switch derivatives calculation back on
+  else
+  {
+     xyz0=xyz;
+     activity=0;
+     ptries=0;
+     while (activity==0)
+     {
+      calc_pert();
+      calculate_activity(atoms_x,atoms_y,atoms_z);
+      if (activity==0)
+         xyz=xyz0;
+         ptries++;
+      if (ptries>50)
+      {
+         xyz=xyz0;
+         dxcalc=true;
+         return;
+      }
+     }
+     if (activity>activity_0)
+     {
+      dxcalc=true;
+      return;
+     }
+     else
+     {
+      double R=random_double(0,1);
+      double mc=exp(-(activity-activity_0)/200);
+      if (mc>=R)
+      {
+       dxcalc=true;
+       return;
+      }
+      else
+      {
+       xyz=xyz0;
+       dxcalc=true;
+       return;
+      }
+     }
+  }
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -301,7 +307,6 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
   }
  }
- activity_cum+=activity;
 }
 
 void Probe::kabsch()
@@ -387,11 +392,14 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   //filename.append(to_string(step));
   filename.append("-stats.csv");
   ofstream wfile;
-  wfile.open(filename.c_str(),std::ios_base::app);
+  
   if (step==0)
   {
-   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
+   wfile.open(filename.c_str());
+   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity activity_0" << endl;
   }
+  else
+   wfile.open(filename.c_str(),std::ios_base::app);
   /*
   for (unsigned j=0; j<n_atoms; j++)
   {
@@ -402,8 +410,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile << probe_id << " " << step << " " << r_target << " "<< atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
-        << activity << " " << activity_cum << " " << activity_old << " "
-        << ptries << endl;
+        << activity << " " << " " << activity_0 << endl;
   wfile.close();
 }
 
@@ -413,7 +420,10 @@ void Probe::print_probe_xyz(int id, int step)
  filename.append(to_string(id));
  filename.append(".xyz");
  ofstream wfile;
- wfile.open(filename.c_str(),std::ios_base::app);
+ if (step==0)
+    wfile.open(filename.c_str());
+ else
+    wfile.open(filename.c_str(),std::ios_base::app);
  wfile << 1 << endl;
  wfile << "Probe  "<< to_string(id) << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;

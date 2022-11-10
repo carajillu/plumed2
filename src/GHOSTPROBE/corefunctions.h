@@ -18,5 +18,7 @@ double dSon_dm(double m, double k);
 double Soff_m(double m, double k);
 
 double dSoff_dm(double m, double k);
+
+double random_double(double bmin, double bmax);
 }
 #endif

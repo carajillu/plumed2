@@ -60,8 +60,6 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
-      unsigned pertstride=0;
-
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
       double deltaRmin=0;        // interval over which contact terms are turned on and off
@@ -313,17 +311,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "DELTAP = " << deltaP << endl;
 
       parse("KPERT",kpert);
-      parse("PERTSTRIDE",pertstride);
-      if (!kpert or !pertstride)
+      if (!kpert)
       {
         kpert=0.001;
-        pertstride=-1;
-        cout << " KPERT and/or PERTRSTRIDE not set -- POCKET SEARCH WILL NOT BE DONE " << endl;
-      }
-      else
-      {
-        cout << "Probe will be perturbed every " << pertstride << " steps.";
-        cout << "The perturbation will be of " << kpert << " nm." << endl;
+        cout << "MC perturbations will be of " << kpert << " nm." << endl;
       }
       
       for (unsigned i = 0; i < nprobes; i++)
@@ -637,9 +628,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           get_init_crd(atoms_x,atoms_y,atoms_z);
         }
         
-        // Check if a perturbation is required (and do it if it is)
-        if (step%pertstride==0 and step>0 and (!nodxfix))
-           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+        probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
         
         //Calculate Psi and its derivatives
         if (!nocvcalc)
