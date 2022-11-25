@@ -314,8 +314,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (!kpert)
       {
         kpert=0.001;
-        cout << "MC perturbations will be of " << kpert << " nm." << endl;
       }
+      cout << "MC perturbations will be of " << kpert << " nm." << endl;
       
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -622,13 +622,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
+         probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
         }
         else
         {
           get_init_crd(atoms_x,atoms_y,atoms_z);
         }
-        
-        probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
         
         //Calculate Psi and its derivatives
         if (!nocvcalc)
