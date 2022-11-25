@@ -124,11 +124,17 @@ void Probe::calc_pert()
 
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
+  if (step==0)
+  {
+    calc_pert();
+    return;
+  }
   dxcalc=false; // switch off derivatives calculation during the perturbation trials
   activity_0=activity;
   calculate_activity(atoms_x,atoms_y,atoms_z);
   if (activity>activity_0)
   {
+     mc_accept=0;
      dxcalc=true;
      return;
   }
@@ -153,20 +159,23 @@ void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> 
      }
      if (activity>activity_0)
      {
+      mc_accept=2;
       dxcalc=true;
       return;
      }
      else
      {
-      double R=random_double(0,1);
-      double mc=exp(-(activity-activity_0)/200);
+      double R=random_double(-1,0);
+      double mc=activity-activity_0;
       if (mc>=R)
       {
+      mc_accept=1;
        dxcalc=true;
        return;
       }
       else
       {
+       mc_accept=-1;
        xyz=xyz0;
        dxcalc=true;
        return;
@@ -396,7 +405,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   if (step==0)
   {
    wfile.open(filename.c_str());
-   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity activity_0" << endl;
+   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity mc_accept activity_0" << endl;
   }
   else
    wfile.open(filename.c_str(),std::ios_base::app);
@@ -410,7 +419,7 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile << probe_id << " " << step << " " << r_target << " "<< atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
-        << activity << " " << " " << activity_0 << endl;
+        << activity << " "<< mc_accept <<" " << activity_0 << endl;
   wfile.close();
 }
 

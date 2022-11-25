@@ -93,6 +93,7 @@ class Probe
   vector<double> xyz_pert;
   vector<double> xyz0;
   unsigned ptries;
+  int mc_accept;
   void calc_pert();
 
  public:
