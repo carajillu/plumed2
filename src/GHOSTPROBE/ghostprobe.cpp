@@ -60,6 +60,7 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
+      unsigned pertstride;
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
       double deltaRmin=0;        // interval over which contact terms are turned on and off
@@ -118,6 +119,7 @@ namespace PLMD
       vector<double> sum_rcrossP;
       //for when correction of derivatives fails
       double err_tol=0.00000001; //1e-8
+      bool dumpderivatives;
 
     public:
       explicit Ghostprobe(const ActionOptions &);
@@ -141,6 +143,7 @@ namespace PLMD
       keys.addFlag("NODXFIX", false, "skip derivative correction");
       keys.addFlag("TABOO", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
+      keys.addFlag("DUMPDERIVATIVES", false, "print derivatives and corrections");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
       keys.add("atoms", "ATOMS_TARGET", "Atoms that define the target region.");
@@ -164,7 +167,8 @@ namespace PLMD
                                                 nocvcalc(false),
                                                 noupdate(false),
                                                 nodxfix(false),
-                                                performance(false)
+                                                performance(false),
+                                                dumpderivatives(false)
     {
 /*
 Initialising openMP threads.
@@ -188,6 +192,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("NOUPDATE", noupdate);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
+      parseFlag("DUMPDERIVATIVES",dumpderivatives);
 
       parseAtomList("ATOMS", atoms);
       n_atoms = atoms.size();
@@ -310,12 +315,17 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         deltaP = 15; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "DELTAP = " << deltaP << endl;
 
+      parse("PERTSTRIDE",pertstride);
+      if(!pertstride)
+      {
+        pertstride=1;
+      }
       parse("KPERT",kpert);
       if (!kpert)
       {
         kpert=0.001;
       }
-      cout << "MC perturbations will be of " << kpert << " nm." << endl;
+      cout << "Perturbations of " << kpert << " nm will be applied to all probes every " << pertstride << " steps." << endl;
       
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -399,7 +409,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
     void Ghostprobe::correct_derivatives()
     {
-      
+      if (step==0 and dumpderivatives)
+      {
+        ofstream wfile;
+        wfile.open("derivatives.csv");
+        wfile << "Step Derivative correction corrected_derivative" << endl;
+        wfile.close();
+      }
       // auto point0=high_resolution_clock::now();
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
@@ -480,6 +496,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
       {
+        if (dumpderivatives)
+        {
+         ofstream wfile;
+         wfile.open("derivatives.csv",std::ios_base::app);
+         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << endl;
+         wfile << step << " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << endl;
+         wfile << step << " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
+         wfile.close(); 
+        }
         d_Psi_dx[j] += P[j + 0 * n_atoms];
         d_Psi_dy[j] += P[j + 1 * n_atoms];
         d_Psi_dz[j] += P[j + 2 * n_atoms];
