@@ -2,11 +2,11 @@
 python ../../python/make_plumedat.py -f equil.gro -s protein
 
 # Run and postprocess 25 simulations of 10 ns
-for sim in {0..4}; do
+for sim in {0..24}; do
     mkdir prod_$sim; 
     cp prod.tpr* plumed.dat* prod_$sim/; 
     cd prod_$sim; 
-       gmx mdrun -v -update gpu -ntomp 16 -deffnm prod -nsteps 0 -plumed plumed.dat # 10 ns
+       gmx mdrun -v -update gpu -ntomp 16 -deffnm prod -nsteps 5000000 -plumed plumed.dat # 10 ns
        gmx trjconv -f  prod.xtc -s prod.tpr -pbc mol -ur compact -center -o prod_dry.xtc << eof
 1
 1
