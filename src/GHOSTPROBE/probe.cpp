@@ -3,9 +3,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <random>
 #include <iterator>
-#include <armadillo> 
+#include <armadillo>
+#include "aidefunctions.h"
 //you can disable bonds check at compile time with the flag -DARMA_NO_DEBUG (makes matrix multiplication 40%ish faster).
 
 #include "core/ActionAtomistic.h"
@@ -18,20 +18,29 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, double RMin, double RMax, double DeltaR, double phimin, double deltaphi, double psimin, double deltapsi, unsigned N_atoms, double kpert, unsigned Init_j)
+Probe::Probe(unsigned Probe_id, 
+            double RMin, double DeltaRmin, 
+            double RMax, double DeltaRmax, 
+            double phimin, double deltaphi, 
+            double psimin, double deltapsi, 
+            unsigned N_atoms, double kpert, 
+            unsigned Init_j)
 {
   init_j=Init_j;
   probe_id=Probe_id;
   dxcalc=true;
   n_atoms=N_atoms;
   Rmin=RMin; // mind below which an atom is considered to be clashing with the probe 
+  deltaRmin=DeltaRmin; // interval over which contact terms are turned on and off
   Rmax=RMax; // distance above which an atom is considered to be too far away from the probe*
-  deltaR=DeltaR; // interval over which contact terms are turned on and off
+  deltaRmax=DeltaRmax; // interval over which contact terms are turned on and off
   Cmin=phimin; 
   deltaC=deltaphi;
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
+  //
+  r_target=INFINITY;
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -72,6 +81,8 @@ Probe::Probe(unsigned Probe_id, double RMin, double RMax, double DeltaR, double 
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
 
+  activity=0;
+  activity_0=0;
   d_activity_dx=vector<double>(n_atoms,0);
   d_activity_dy=vector<double>(n_atoms,0);
   d_activity_dz=vector<double>(n_atoms,0);
@@ -96,14 +107,9 @@ void Probe::place_probe(double x, double y, double z)
 
 void Probe::calc_pert()
 {
-  random_device rd;  // only used once to initialise (seed) engine
-  mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
-
-  for (unsigned i=0; i<3;i++)
+ for (unsigned i=0; i<3;i++)
   {
-   uniform_real_distribution<double> uni(-1, 1); // guaranteed unbiased
-   auto random_double = uni(rng);
-   xyz_pert[i]=random_double;
+   xyz_pert[i]=random_double(-1,1);
   }
   double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
   double k=Kpert/norm;
@@ -118,48 +124,64 @@ void Probe::calc_pert()
 
 void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
-  //if no perturbation is needed, just update data and leave
-  if (((activity_cum > activity_old) and step>0))
+  if (step==0)
   {
-   activity_old=activity_cum;
-   activity_cum=0;
-   ptries=0;
-   return;
-  }
-
-  dxcalc=false; // switch off derivatives calculation during the perturbation trials
-  xyz0=xyz;
-  ptries=0;
-  P=0;
-  double r=INFINITY;
-
-  while (P<0.0000000001)
-  {
-    xyz=xyz0;
     calc_pert();
-    calculate_r(atoms_x,atoms_y,atoms_z);
-    calculate_P();
-    r=sqrt((pow((xyz[0]-atoms_x[init_j]),2))+(pow((xyz[1]-atoms_y[init_j]),2))+(pow((xyz[2]-atoms_z[init_j]),2)));
-    ptries++;
-    if (ptries > 1000000) 
-    {
-      /*
-      cout << "Probe " << probe_id << " could not be settled after 10000 perturbation trials." << endl;
-      cout << "min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
-      cout << min_r << " " 
-           << total_enclosure << " " << P << " " 
-           << total_clash << " " << C << " " 
-           << activity << " " << activity_cum << " " << activity_old << " "
-           << ptries << endl;
-      cout << "reverting Probe " << probe_id << " to its unperturbed coordinates." << endl;
-      */
-      xyz=xyz0;
-      break;
-    }
-  }    
-  activity_old=activity_cum;
-  activity_cum=0;
-  dxcalc=true; //switch derivatives calculation back on
+    return;
+  }
+  dxcalc=false; // switch off derivatives calculation during the perturbation trials
+  activity_0=activity;
+  calculate_activity(atoms_x,atoms_y,atoms_z);
+  if (activity>activity_0)
+  {
+     mc_accept=0;
+     dxcalc=true;
+     return;
+  }
+  else
+  {
+     xyz0=xyz;
+     activity=0;
+     ptries=0;
+     while (activity==0)
+     {
+      calc_pert();
+      calculate_activity(atoms_x,atoms_y,atoms_z);
+      if (activity==0)
+         xyz=xyz0;
+         ptries++;
+      if (ptries>50)
+      {
+         xyz=xyz0;
+         dxcalc=true;
+         return;
+      }
+     }
+     if (activity>activity_0)
+     {
+      mc_accept=2;
+      dxcalc=true;
+      return;
+     }
+     else
+     {
+      double R=random_double(-1,0);
+      double mc=activity-activity_0;
+      if (mc>=R)
+      {
+      mc_accept=1;
+       dxcalc=true;
+       return;
+      }
+      else
+      {
+       mc_accept=-1;
+       xyz=xyz0;
+       dxcalc=true;
+       return;
+      }
+     }
+  }
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -195,7 +217,7 @@ void Probe::calculate_enclosure()
  total_enclosure=0;
  for (unsigned j=0; j<n_atoms; j++)
  {
-  if (r[j] >= (Rmax+deltaR))
+  if (r[j] >= (Rmax+deltaRmax))
   {
    enclosure[j]=0;
    d_enclosure_dx[j]=0;
@@ -204,8 +226,8 @@ void Probe::calculate_enclosure()
    continue;
   }
 
-  double m_r=COREFUNCTIONS::m_v(r[j],Rmax,deltaR);
-  double dm_dr=COREFUNCTIONS::dm_dv(deltaR);
+  double m_r=COREFUNCTIONS::m_v(r[j],Rmax,deltaRmax);
+  double dm_dr=COREFUNCTIONS::dm_dv(deltaRmax);
 
   enclosure[j]=COREFUNCTIONS::Soff_m(m_r,1);
   if (dxcalc)
@@ -240,7 +262,7 @@ void Probe::calculate_clash()
  total_clash=0; 
  for (unsigned j=0; j<n_atoms; j++)
  {
-  if (r[j] >= Rmin+deltaR)
+  if (r[j] >= Rmin+deltaRmin)
   {
    clash[j]=0;
    d_clash_dx[j]=0;
@@ -248,8 +270,8 @@ void Probe::calculate_clash()
    d_clash_dz[j]=0;
    continue;
   }
-  double m_r=COREFUNCTIONS::m_v(r[j],Rmin,deltaR);
-  double dm_dr=COREFUNCTIONS::dm_dv(deltaR);
+  double m_r=COREFUNCTIONS::m_v(r[j],Rmin,deltaRmin);
+  double dm_dr=COREFUNCTIONS::dm_dv(deltaRmin);
 
   clash[j]=COREFUNCTIONS::Soff_m(m_r,1);
   if (dxcalc)
@@ -294,7 +316,6 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
   }
  }
- activity_cum+=activity;
 }
 
 void Probe::kabsch()
@@ -371,20 +392,23 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
-void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, double ref_x, double ref_y, double ref_z)
+void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
 {
-  double r=sqrt((pow((xyz[0]-ref_x),2))+(pow((xyz[1]-ref_y),2))+(pow((xyz[2]-ref_z),2)));
+  r_target=sqrt(pow((xyz[0]-target_xyz[0]),2)+pow((xyz[1]-target_xyz[1]),2)+pow((xyz[2]-target_xyz[2]),2));
   string filename = "probe-";
   filename.append(to_string(id));
   //filename.append("-step-");
   //filename.append(to_string(step));
   filename.append("-stats.csv");
   ofstream wfile;
-  wfile.open(filename.c_str(),std::ios_base::app);
+  
   if (step==0)
   {
-   wfile << "Step Dref min_r_serial min_r enclosure P clash C activity activity_cum activity_old Ptries" << endl;
+   wfile.open(filename.c_str());
+   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity mc_accept activity_0" << endl;
   }
+  else
+   wfile.open(filename.c_str(),std::ios_base::app);
   /*
   for (unsigned j=0; j<n_atoms; j++)
   {
@@ -392,11 +416,10 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << step << " " << r << " " << atoms[j_min_r].serial() << " " << min_r << " " 
+  wfile << probe_id << " " << step << " " << r_target << " "<< atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
-        << activity << " " << activity_cum << " " << activity_old << " "
-        << ptries << endl;
+        << activity << " "<< mc_accept <<" " << activity_0 << endl;
   wfile.close();
 }
 
@@ -406,7 +429,10 @@ void Probe::print_probe_xyz(int id, int step)
  filename.append(to_string(id));
  filename.append(".xyz");
  ofstream wfile;
- wfile.open(filename.c_str(),std::ios_base::app);
+ if (step==0)
+    wfile.open(filename.c_str());
+ else
+    wfile.open(filename.c_str(),std::ios_base::app);
  wfile << 1 << endl;
  wfile << "Probe  "<< to_string(id) << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;

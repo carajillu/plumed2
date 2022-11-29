@@ -1,4 +1,5 @@
 /*
+/test/sample_run
 # in this directory, only accept source, Makefile and README
 !/.gitignore
 !/*.c
@@ -7,5 +8,6 @@
 !/Makefile
 !/README
 !/module.type
-!/test
+!/doc
+!/test/
 !/python

@@ -1,0 +1,24 @@
+1. DEPENDENCIES
+   GHOSTPROBE relies on the use of the armadillo library (https://arma.sourceforge.net/), which
+   in turn relies on blas and lapack. PLUMED has its own internal blas and lapack, but for best
+   performance, either openblas or intel-mkl are recommended. This installation instructions use
+   intel-mkl. To install the required libraries, run the following in the specified order:
+
+   sudo apt install intel-mkl # when prompted, accept that blas and lapack point to intel-mkl
+   sudo apt install librarmadillo-dev
+
+2. INSTALLATION
+   To install the plumed version that contains GHOSTPROBE, run the following commands in the plumed2_carajillu
+   directory:
+
+   ./configure --prefix=/home/carajillu/local/plumed2 LIBS='-larmadillo'
+   make install # may add the -j option to speed up the installation. Tested with -j8.
+
+3. PERFORMANCE
+   This setup gives a performance of ~100 ns/day using the system in the test folder on 
+   an ASUS ROG G14 2021 Edition (RXT3060 Laptop GPU + AMD Ryzen 9 5900HS). Using Gromacs
+   2021.4 on Ubuntu 20.04 emulator for WSL. Comparatively low performnance may be due to
+   not linking libraries correctly.   
+
+3. ISSUES 
+   Please report any installation issues on the github repo or at joan.clark88@gmail.com 

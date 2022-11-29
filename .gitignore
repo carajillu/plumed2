@@ -24,3 +24,5 @@ makefile.dep
 /stamp-h
 .vscode/*
 
+src/GHOSTPROBE/python/paramscan.py
+src/GHOSTPROBE/python/Rscan.py

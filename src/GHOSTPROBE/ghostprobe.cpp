@@ -30,6 +30,7 @@
 #include <chrono>
 #include <armadillo>
 #include <omp.h>
+#include "aidefunctions.h"
 
 // CV modules
 #include "probe.h"
@@ -59,12 +60,12 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
-      unsigned pertstride=0;
-
+      unsigned pertstride;
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
+      double deltaRmin=0;        // interval over which contact terms are turned on and off
       double Rmax=0;          // distance above which an atom is considered to be too far away from the probe*
-      double deltaR=0;        // interval over which contact terms are turned on and off
+      double deltaRmax=0;        // interval over which contact terms are turned on and off
       double Pmin=0;           // packing factor below which depth term equals 0
       double deltaP=0;         // interval over which depth term turns from 0 to 1
       double Cmin=0;           // packing factor below which depth term equals 0
@@ -81,6 +82,11 @@ namespace PLMD
       vector<PLMD::AtomNumber> atoms_init; // Indices of the atoms in which the probes will be initially centered
       unsigned n_init=0;                     // number of atoms used in ATOMS_INIT
       vector<unsigned> init_j;             // Indices of atoms_init in getPositions()
+
+      vector<PLMD::AtomNumber> atoms_target; // Indices of the atoms defining target region
+      unsigned n_target=0;                     // number of atoms used in ATOMS_TARGET
+      vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
+      vector<double> target_xyz;
 
       vector<Probe> probes; // This will contain all the spherical probes
       unsigned nprobes=0;     // number of spherical probes to use
@@ -113,6 +119,7 @@ namespace PLMD
       vector<double> sum_rcrossP;
       //for when correction of derivatives fails
       double err_tol=0.00000001; //1e-8
+      bool dumpderivatives;
 
     public:
       explicit Ghostprobe(const ActionOptions &);
@@ -122,6 +129,7 @@ namespace PLMD
       void correct_derivatives();
       void print_protein();
       static void registerKeywords(Keywords &keys);
+      void get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
     };
 
     PLUMED_REGISTER_ACTION(Ghostprobe, "GHOSTPROBE")
@@ -135,14 +143,17 @@ namespace PLMD
       keys.addFlag("NODXFIX", false, "skip derivative correction");
       keys.addFlag("TABOO", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
+      keys.addFlag("DUMPDERIVATIVES", false, "print derivatives and corrections");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
+      keys.add("atoms", "ATOMS_TARGET", "Atoms that define the target region.");
       keys.add("optional", "NPROBES", "Number of probes to use");
       keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
       keys.add("optional", "RMIN", "");
+      keys.add("optional", "DELTARMIN", "");
       keys.add("optional", "RMAX", "");
-      keys.add("optional", "DELTAR", "");
+      keys.add("optional", "DELTARMAX", "");
       keys.add("optional", "CMIN", "");
       keys.add("optional", "DELTAC", "");
       keys.add("optional", "PMIN", "");
@@ -156,7 +167,8 @@ namespace PLMD
                                                 nocvcalc(false),
                                                 noupdate(false),
                                                 nodxfix(false),
-                                                performance(false)
+                                                performance(false),
+                                                dumpderivatives(false)
     {
 /*
 Initialising openMP threads.
@@ -180,81 +192,112 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("NOUPDATE", noupdate);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
+      parseFlag("DUMPDERIVATIVES",dumpderivatives);
 
       parseAtomList("ATOMS", atoms);
-      parseAtomList("ATOMS_INIT", atoms_init);
-
       n_atoms = atoms.size();
+
+      parseAtomList("ATOMS_INIT", atoms_init);
       n_init = atoms_init.size();
 
-      //The following bit checks if ATOMS_INIT are already in ATOMS.
-      //Those that are are not requested twice.
-      for (unsigned k = 0; k < atoms_init.size(); k++)
-      {
-        for (unsigned j=0; j<atoms.size(); j++)
-        {
-          if (atoms_init[k]==atoms[j])
-          {
-           init_j.push_back(j);
-           break; 
-          }
-          if (j==(atoms.size()-1))
-          {
-            cout << "Atom " << atoms_init[k].serial() << " not found in ATOMS. Exiting." << endl;
-            atoms.push_back(atoms_init[k]);
-            init_j.push_back(n_atoms+1);
-          }
-        }
-      }
-
-      cout << "Requesting " << n_atoms << " atoms" << endl;
-      requestAtoms(atoms);
-      cout << "--------- Initialising Ghostprobe Collective Variable -----------" << endl;
+      parseAtomList("ATOMS_TARGET", atoms_target);
+      n_target = atoms_target.size();
+      target_xyz=vector<double>(3,INFINITY);
 
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
         nprobes = 16;
       }
-
-      if (nprobes != atoms_init.size() and atoms_init.size() > 0)
+      
+      /*
+      The following bit checks if ATOMS_INIT has been specified.
+      If so, all probes will be initialised in the centre of ATOMS_INIT.
+      Otherwise, each probe will be initialised on a protein atom chosen at random.
+      */      
+      if (n_init==0)
       {
-        cout << "Overriding NPROBES with the length of ATOMS_INIT" << endl;
-        nprobes = atoms_init.size();
-      }
-
-      if (atoms_init.size() == 0)
-      {
-        for (unsigned i = 0; i < nprobes; i++)
+        cout << "geting random atoms_init" << endl;
+        for (unsigned i=0; i<nprobes; i++)
         {
-          random_device rd;                                   // only used once to initialise (seed) engine
-          mt19937 rng(rd());                                  // random-number engine used (Mersenne-Twister in this case)
-          uniform_int_distribution<unsigned> uni(0, n_atoms); // guaranteed unbiased
-          auto random_integer = uni(rng);
-          init_j.push_back(random_integer);
+          unsigned j_rand=aidefunctions::get_random_integer(0, n_atoms-1);
+          init_j.push_back(j_rand);
+          cout << j_rand << endl;
+        }
+        cout << "got random atoms_init" << endl;
+      }
+      else
+      {
+        for (unsigned j=0;j<n_init; j++)
+        {
+          int j_idx=aidefunctions::findIndex(atoms,atoms_init[j]);
+          if (j_idx==-1)
+          {
+            cout << "Atom " << atoms_init[j].index() << " not found in ATOMS. Adding it." << endl;
+            atoms.push_back(atoms_init[j]);
+            init_j.push_back(atoms.size()-1);
+          }
+          else
+          {
+            init_j.push_back(j_idx);
+          }
         }
       }
+    
+    /*
+      The following bit checks if ATOMS_TARGET has been specified.
+      If so, those atoms will be added to vector<PLMD::AtomNumber> atoms
+      */ 
+      
+      if (n_target!=0)
+      {
+        cout << "Target region is defined by atoms: " << endl;
+        for (unsigned j=0;j<n_target; j++)
+        {
+          cout << atoms_target[j].index() << endl;
+          int j_idx=aidefunctions::findIndex(atoms,atoms_target[j]);
+          if (j_idx==-1)
+          {
+            cout << "Atom " << atoms_target[j].index() << " not found in ATOMS or ATOMS_INIT. Adding it." << endl;
+            atoms.push_back(atoms_target[j]);
+            target_j.push_back(atoms.size()-1);
+          }
+          else
+          {
+            target_j.push_back(j_idx);
+          }
+        }
+      }
+
+      cout << "Requesting " << atoms.size() << " atoms" << endl;
+      requestAtoms(atoms);
+      cout << "--------- Initialising Ghostprobe Collective Variable -----------" << endl;
 
       cout << "Using " << nprobes << " spherical probe(s) with the following parameters:" << endl;
 
       parse("RMIN", Rmin);
       if (!Rmin)
-        Rmin = 0.25;
+        Rmin = 0.;
       cout << "Rmin = " << Rmin << " nm" << endl;
+
+      parse("DELTARMIN", deltaRmin);
+      if (!deltaRmin)
+        deltaRmin = 0.15;
+      cout << "deltaRmin = " << deltaRmin << " nm" << endl;
 
       parse("RMAX", Rmax);
       if (!Rmax)
         Rmax = 0.6;
       cout << "Rmax = " << Rmax << " nm" << endl;
 
-      parse("DELTAR", deltaR);
-      if (!deltaR)
-        deltaR = 0.15;
-      cout << "deltaR = " << deltaR << " nm" << endl;
+      parse("DELTARMAX", deltaRmax);
+      if (!deltaRmax)
+        deltaRmax = 0.15;
+      cout << "deltaRmax = " << deltaRmax << " nm" << endl;
 
       parse("CMIN", Cmin);
       if (!Cmin)
-        Cmin = 0; // obtained from generating 10000 random points in VHL's crystal structure
+        Cmin = 0.; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "CMIN = " << Cmin << endl;
 
       parse("DELTAC", deltaC);
@@ -272,23 +315,28 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         deltaP = 15; // obtained from generating 10000 random points in VHL's crystal structure
       cout << "DELTAP = " << deltaP << endl;
 
-      parse("KPERT",kpert);
-      cout << "KPERT = " << kpert << " nm"; 
-      if (!kpert)
-         cout << " -- POCKET SEARCH WILL NOT BE DONE ";
-      cout << endl;
-
       parse("PERTSTRIDE",pertstride);
-      if (!pertstride)  
-          pertstride=100;
-      cout << "PERTSTRIDE = " << pertstride << endl;
-      cout << "Probe will be perturbed every " << pertstride << " steps";
-      cout << endl;  
+      if(!pertstride)
+      {
+        pertstride=1;
+      }
+      parse("KPERT",kpert);
+      if (!kpert)
+      {
+        kpert=0.001;
+      }
+      cout << "Perturbations of " << kpert << " nm will be applied to all probes every " << pertstride << " steps." << endl;
       
       for (unsigned i = 0; i < nprobes; i++)
       {
-        probes.push_back(Probe(i,Rmin, Rmax, deltaR, Cmin, deltaC, Pmin, deltaP, n_atoms, kpert,init_j[i]));
-        cout << "Probe " << i << " initialised, centered on atom: " << to_string(atoms[init_j[i]].serial()) << endl;
+        probes.push_back(Probe(i,
+                               Rmin, deltaRmin, 
+                               Rmax, deltaRmax, 
+                               Cmin, deltaC, 
+                               Pmin, deltaP, 
+                               n_atoms, kpert,
+                               init_j[i]));
+        cout << "Probe " << i << " initialised" << endl;
       }
 
       // parameters used to control output
@@ -361,7 +409,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
     void Ghostprobe::correct_derivatives()
     {
-      
+      if (step==0 and dumpderivatives)
+      {
+        ofstream wfile;
+        wfile.open("derivatives.csv");
+        wfile << "Step Derivative correction corrected_derivative" << endl;
+        wfile.close();
+      }
       // auto point0=high_resolution_clock::now();
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
@@ -442,6 +496,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
       {
+        if (dumpderivatives)
+        {
+         ofstream wfile;
+         wfile.open("derivatives.csv",std::ios_base::app);
+         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << endl;
+         wfile << step << " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << endl;
+         wfile << step << " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
+         wfile.close(); 
+        }
         d_Psi_dx[j] += P[j + 0 * n_atoms];
         d_Psi_dy[j] += P[j + 1 * n_atoms];
         d_Psi_dz[j] += P[j + 2 * n_atoms];
@@ -516,6 +579,42 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
      wfile.close();
     }
 
+    void Ghostprobe::get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
+    {
+      double x=0;
+      double y=0;
+      double z=0;
+
+      if (atoms_init.size() == 0)
+      {
+        for (unsigned i = 0; i < nprobes; i++)
+        {
+          x=getPosition(init_j[i])[0];
+          y=getPosition(init_j[i])[1];
+          z=getPosition(init_j[i])[2];
+          probes[i].place_probe(x,y,z);
+          probes[i].perturb_probe(0,atoms_x,atoms_y,atoms_z);
+          cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
+        }
+      }
+      else
+      {
+       //cout << n_atoms << endl;
+       for (unsigned j=0; j<init_j.size();j++)
+       {
+        //cout << j << " " << init_j[j] << " " << getPosition(init_j[j])[0]<< " " << getPosition(init_j[j])[1]<< " " << getPosition(init_j[j])[2] <<  endl;
+        x+=getPosition(init_j[j])[0]/init_j.size();
+        y+=getPosition(init_j[j])[1]/init_j.size();
+        z+=getPosition(init_j[j])[2]/init_j.size();
+       }
+       for (unsigned i = 0; i < nprobes; i++)
+       {
+        probes[i].place_probe(x,y,z);
+       }
+       //cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
+      }
+    }
+
     // calculator
     void Ghostprobe::calculate()
     {
@@ -528,7 +627,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       reset();
 
       step = getStep();
-      //#pragma omp parallel for //?
+      
+      // Get atom positions
       for (unsigned j = 0; j < n_atoms; j++)
       {
         atoms_x[j] = getPosition(j)[0];
@@ -536,28 +636,28 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         atoms_z[j] = getPosition(j)[2];
       }
 
+      // At step 0, place the probes using get_init_crd()
+      if (step==0)
+         get_init_crd(atoms_x,atoms_y,atoms_z);
+
       #pragma omp parallel for
       for (unsigned i = 0; i < nprobes; i++)
       {
-        // set up stuff at step 0
-        if (step == 0)
-        {
-          double x = getPosition(init_j[i])[0];
-          double y = getPosition(init_j[i])[1];
-          double z = getPosition(init_j[i])[2];
-          probes[i].place_probe(x, y, z);
-          if (!nodxfix)  
-              probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
-          else
-              probes[i].place_probe(x+0.1, y+0.1, z+0.1);
-        }
-
         // Update probe coordinates
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
+         if (step%pertstride==0)
+          {
+           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+          }
         }
-
+        else
+        {
+          get_init_crd(atoms_x,atoms_y,atoms_z);
+        }
+        
+        //Calculate Psi and its derivatives
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
@@ -569,16 +669,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             d_Psi_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
           }
         }
-        
-        if (step%pertstride==0 and step>0 and (!nodxfix))
-           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
       }
 
+      //Correct the Psi derivatives so that they sum 0
       if (!nodxfix)
       {
        correct_derivatives();
       }
    
+      //Send Psi and derivatives back to Plumed
       setValue(Psi);
       for (unsigned j=0;j<n_atoms;j++)
       {
@@ -589,16 +688,25 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        if (step % probestride == 0)
        {
          print_protein();
+         if (n_target!=0)
+         {
+          target_xyz[0]=0;
+          target_xyz[1]=0;
+          target_xyz[2]=0;
+          for (unsigned j=0; j<n_target; j++)
+          {
+            target_xyz[0]+=getPosition(target_j[j])[0]/n_target;
+            target_xyz[1]+=getPosition(target_j[j])[1]/n_target;
+            target_xyz[2]+=getPosition(target_j[j])[2]/n_target;
+          }
+         }
+
          for (unsigned i=0; i<nprobes;i++)
          {
           // Get coordinates of the reference atom
           unsigned j = init_j[i];
-
-          double ref_x = getPosition(j)[0];
-          double ref_y = getPosition(j)[1];
-          double ref_z = getPosition(j)[2];
           probes[i].print_probe_xyz(i, step);
-          probes[i].print_probe_movement(i, step, atoms, n_atoms, ref_x, ref_y, ref_z);
+          probes[i].print_probe_movement(i, step, atoms, n_atoms, target_xyz);
          }
        }
       

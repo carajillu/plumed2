@@ -1,5 +1,6 @@
 #include <iostream>
 #include "corefunctions.h"
+#include <random>
 
 using namespace std;
 
@@ -55,4 +56,13 @@ double COREFUNCTIONS::dSoff_dm(double m, double k)
     else
         dS_off=k*(12*(pow((m-1),3)-pow((m-1),5)));
     return dS_off;
+}
+
+double COREFUNCTIONS::random_double(double bmin, double bmax)
+{
+  random_device rd;  // only used once to initialise (seed) engine
+  mt19937 rng(rd()); // random-number engine used (Mersenne-Twister in this case)
+  uniform_real_distribution<double> uni(-1, 1); // guaranteed unbiased
+  auto random_double = uni(rng);
+  return random_double;
 }
