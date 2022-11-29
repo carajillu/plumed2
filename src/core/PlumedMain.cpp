@@ -124,28 +124,31 @@ namespace PLMD {
 }
 
 namespace {
-class Register {
-  std::vector<PlumedMain*> instances;
+// This is an internal tool used to count how many PlumedMain objects have been created
+// and if they were correctly destroyed.
+// When using debug options, it leads to a crash
+// Otherwise, it just prints a message
+class CountInstances {
+  std::atomic<int> counter{};
 public:
-  void add(PlumedMain* instance) {
-    instances.push_back(instance);
+  void increase() noexcept {
+    ++counter;
   }
-  void remove(PlumedMain* instance) {
-    auto it = std::find(instances.begin(), instances.end(), instance);
-    if(it==instances.end()) {
-      std::cerr<<"WARNING: internal inconsistency in allocated PlumedMain instances\n";
-    } else {
-      instances.erase(it);
+  void decrease() noexcept {
+    --counter;
+  }
+  ~CountInstances() {
+    if(counter!=0) {
+      std::cerr<<"WARNING: internal inconsistency in allocated PlumedMain instances (" <<counter<< ")\n";
+#ifndef NDEBUG
+      std::abort();
+#endif
     }
   }
-  ~Register() {
-    if(instances.size()>0) std::cerr<<"PLUMED instances was not properly deallocated in your code: "<<instances.size()<<"\n";
-  }
 };
-
-static Register myregister;
-
+static CountInstances countInstances;
 }
+
 
 PlumedMain::PlumedMain():
   initialized(false),
@@ -166,14 +169,16 @@ PlumedMain::PlumedMain():
   novirial(false),
   detailedTimers(false)
 {
+  increaseReferenceCounter();
   log.link(comm);
   log.setLinePrefix("PLUMED: ");
-  myregister.add(this);
+  // this is at last so as to avoid inconsistencies if an exception is thrown
+  countInstances.increase(); // noexcept
 }
 
 // destructor needed to delete forward declarated objects
 PlumedMain::~PlumedMain() {
-  myregister.remove(this);
+  countInstances.decrease();
 }
 
 /////////////////////////////////////////////////////////////
@@ -1054,6 +1059,18 @@ void PlumedMain::runJobsAtEndOfCalculation() {
   for(const auto & p : actionSet) {
     p->runFinalJobs();
   }
+}
+
+unsigned PlumedMain::increaseReferenceCounter() noexcept {
+  return ++referenceCounter;
+}
+
+unsigned PlumedMain::decreaseReferenceCounter() noexcept {
+  return --referenceCounter;
+}
+
+unsigned PlumedMain::useCountReferenceCounter() const noexcept {
+  return referenceCounter;
 }
 
 #ifdef __PLUMED_HAS_PYTHON
