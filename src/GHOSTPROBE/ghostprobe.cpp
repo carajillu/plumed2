@@ -647,7 +647,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
-         probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+         if (step%pertstride==0)
+          {
+           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
+          }
         }
         else
         {
