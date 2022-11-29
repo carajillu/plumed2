@@ -9,20 +9,20 @@ import sys
 defline="""GHOSTPROBE ...
 LABEL=d
 NPROBES=16 PROBESTRIDE=2500
-KPERT=0.1 PERTSTRIDE=25000
 RMIN=0 DELTARMIN=0.4
 RMAX=0.45 DELTARMAX=0.30
-CMIN=0 DELTAC=1
+CMIN=0 DELTAC=2.5
 PMIN=10 DELTAP=10
+KPERT=0.1 PERTSTRIDE=1
 """
 
-biasline="RESTRAINT ARG=d AT=1.0 KAPPA=500 STRIDE=10\n"
+biasline="RESTRAINT ARG=d AT=1.0 KAPPA=5000 STRIDE=10\n"
 printline="PRINT ARG=d FILE=COLVAR STRIDE=2500"
 
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--regex', nargs="?", type=str, help="Regex to find all probe-$i-stats.csv files",default=None)
+    parser.add_argument('-i','--regex', nargs="?", type=str, help="Regex to find all probe-$i-stats.csv files (for initial setup do NOT specify)",default=None)
     parser.add_argument('-f','--input_gro', nargs="?", type=str, help="Reference structure (issued by gmx trjconv)",default="md_dry.gro")
     parser.add_argument('-s','--selection', nargs="?", type=str, help="Selection of atoms that will go in plumed",default="protein")
     parser.add_argument('-a','--activity',nargs="?", type=float,help="Minimum probe activity to be considered",default=1.0)
@@ -185,12 +185,12 @@ def build_plumedat(defline,ATOMS,lines):
          fileout=open(name,"w")
          fileout.write(defline)
          fileout.write(lines[i]+"\n")
-         fileout.write("... SPHDRUG\n")
+         fileout.write("... GHOSTPROBE\n")
          fileout.write(biasline)
          fileout.write(printline)
          fileout.close()
     else:
-        defline=defline+"... SPHDRUG\n"
+        defline=defline+"... GHOSTPROBE\n"
         fileout=open("plumed.dat","w")
         fileout.write(defline)
         fileout.write(biasline)
