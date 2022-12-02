@@ -705,8 +705,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
          {
           // Get coordinates of the reference atom
           unsigned j = init_j[i];
-          probes[i].print_probe_xyz(i, step);
-          probes[i].print_probe_movement(i, step, atoms, n_atoms, target_xyz);
+          probes[i].print_probe_xyz(step);
+          probes[i].print_probe_movement(step, atoms, n_atoms, target_xyz);
          }
        }
       

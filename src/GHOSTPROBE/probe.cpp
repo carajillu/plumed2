@@ -392,11 +392,11 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
-void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
+void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
 {
   r_target=sqrt(pow((xyz[0]-target_xyz[0]),2)+pow((xyz[1]-target_xyz[1]),2)+pow((xyz[2]-target_xyz[2]),2));
   string filename = "probe-";
-  filename.append(to_string(id));
+  filename.append(to_string(probe_id));
   //filename.append("-step-");
   //filename.append(to_string(step));
   filename.append("-stats.csv");
@@ -423,10 +423,10 @@ void Probe::print_probe_movement(int id, int step, vector<PLMD::AtomNumber> atom
   wfile.close();
 }
 
-void Probe::print_probe_xyz(int id, int step)
+void Probe::print_probe_xyz(int step)
 {
  string filename = "probe-";
- filename.append(to_string(id));
+ filename.append(to_string(probe_id));
  filename.append(".xyz");
  ofstream wfile;
  if (step==0)
@@ -434,7 +434,7 @@ void Probe::print_probe_xyz(int id, int step)
  else
     wfile.open(filename.c_str(),std::ios_base::app);
  wfile << 1 << endl;
- wfile << "Probe  "<< to_string(id) << endl;
+ wfile << "Probe  "<< to_string(probe_id) << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;
  wfile.close();
 }
