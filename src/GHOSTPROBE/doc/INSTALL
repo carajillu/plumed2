@@ -23,6 +23,9 @@
    Once the installation is finshed, you need to add this to your ~/.bashrc file:
    export LD_LIBRARY_PATH=/path/to/directory/plumed2/lib/:$LD_LIBRARY_PATH
    export PLUMED_KERNEL=/home/jcn/local/plumed2/lib/libplumedKernel.so
+   
+   To patch your MD engine with plumed, follow the instructions here:
+   https://www.plumed.org/doc-v2.7/user-doc/html/patch.html
 
 3. PERFORMANCE
    This setup gives a performance of ~100 ns/day using the system in the test folder on 
