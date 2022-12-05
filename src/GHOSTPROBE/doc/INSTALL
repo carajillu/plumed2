@@ -5,13 +5,24 @@
    intel-mkl. Instructions to install the requyired libraries can be found here:
    - intel-mkl: https://www.intel.com/content/www/us/en/developer/articles/guide/installing-free-libraries-and-python-apt-repo.html
    - armadillo: https://arma.sourceforge.net/download.html
+   
+   The setup and analysis scripts rely on the use of the following python modules:
+   - pandas
+   - matplotlib
+   - mdtraj
+   - pymp
+   - pickle
 
 2. INSTALLATION
    To install the plumed version that contains GHOSTPROBE, run the following commands in the plumed2_carajillu
    directory:
 
-   ./configure --prefix=/home/carajillu/local/plumed2 LIBS='-larmadillo'
+   ./configure --prefix=/path/to/directory/plumed2 LIBS='-larmadillo'
    make install # may add the -j option to speed up the installation. Tested with -j8.
+   
+   Once the installation is finshed, you need to add this to your ~/.bashrc file:
+   export LD_LIBRARY_PATH=/path/to/directory/plumed2/lib/:$LD_LIBRARY_PATH
+   export PLUMED_KERNEL=/home/jcn/local/plumed2/lib/libplumedKernel.so
 
 3. PERFORMANCE
    This setup gives a performance of ~100 ns/day using the system in the test folder on 
