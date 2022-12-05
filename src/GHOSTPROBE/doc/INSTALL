@@ -1,11 +1,10 @@
 1. DEPENDENCIES
-   GHOSTPROBE relies on the use of the armadillo library (https://arma.sourceforge.net/), which
+   GHOSTPROBE relies on the use of the armadillo library, which
    in turn relies on blas and lapack. PLUMED has its own internal blas and lapack, but for best
    performance, either openblas or intel-mkl are recommended. This installation instructions use
-   intel-mkl. To install the required libraries, run the following in the specified order:
-
-   sudo apt install intel-mkl # when prompted, accept that blas and lapack point to intel-mkl
-   sudo apt install librarmadillo-dev
+   intel-mkl. Instructions to install the requyired libraries can be found here:
+   - intel-mkl: https://www.intel.com/content/www/us/en/developer/articles/guide/installing-free-libraries-and-python-apt-repo.html
+   - armadillo: https://arma.sourceforge.net/download.html
 
 2. INSTALLATION
    To install the plumed version that contains GHOSTPROBE, run the following commands in the plumed2_carajillu
