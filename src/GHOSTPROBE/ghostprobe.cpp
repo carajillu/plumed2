@@ -173,10 +173,11 @@ namespace PLMD
 /*
 Initialising openMP threads.
 This does not seem to be affected by the environment variable $PLUMED_NUM_THREADS
-*/
-#pragma omp parallel
+*/    #pragma omp parallel 
+      {
       nthreads = omp_get_num_threads();
       ndev = omp_get_num_devices();
+      }
       cout << "------------ Available Computing Resources -------------" << endl;
       cout << "Ghostprobe initialised with " << nthreads << " OMP threads " << endl;
       cout << "and " << ndev << " OMP compatible accelerators (not currently used)" << endl;
@@ -409,6 +410,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
     void Ghostprobe::correct_derivatives()
     {
+      //cout << "entering derivatives correction" << endl;
       if (step==0 and dumpderivatives)
       {
         ofstream wfile;
@@ -496,7 +498,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        if (dumpderivatives)
+        if (dumpderivatives and step%probestride==0)
         {
          ofstream wfile;
          wfile.open("derivatives.csv",std::ios_base::app);
@@ -556,6 +558,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       exit(0);
       */
+     //cout << "exiting derivatives correction" << endl;
     }
 
     void Ghostprobe::print_protein()
@@ -593,7 +596,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           y=getPosition(init_j[i])[1];
           z=getPosition(init_j[i])[2];
           probes[i].place_probe(x,y,z);
-          probes[i].perturb_probe(0,atoms_x,atoms_y,atoms_z);
+          probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
           cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
         }
       }
@@ -640,17 +643,14 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (step==0)
          get_init_crd(atoms_x,atoms_y,atoms_z);
 
-      #pragma omp parallel for
+      #pragma omp parallel for 
       for (unsigned i = 0; i < nprobes; i++)
       {
+        
         // Update probe coordinates
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
-         if (step%pertstride==0)
-          {
-           probes[i].perturb_probe(step,atoms_x,atoms_y,atoms_z);
-          }
         }
         else
         {
@@ -661,13 +661,26 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         if (!nocvcalc)
         {
           probes[i].calculate_activity(atoms_x, atoms_y, atoms_z);
-          Psi+=probes[i].activity/nprobes;
-          for (unsigned j=0;j<n_atoms;j++)
+          #pragma omp critical //avoid race condition
           {
-            d_Psi_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
-            d_Psi_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
-            d_Psi_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+           Psi+=probes[i].activity/nprobes;
+           for (unsigned j=0;j<n_atoms;j++)
+           {
+             d_Psi_dx[j]+=probes[i].d_activity_dx[j]/nprobes;
+             d_Psi_dy[j]+=probes[i].d_activity_dy[j]/nprobes;
+             d_Psi_dz[j]+=probes[i].d_activity_dz[j]/nprobes;
+           }
           }
+        }
+
+        if (step%probestride==0)
+        {
+          probes[i].activity_avg/=probes[i].activity_count;
+          probes[i].print_probe_xyz(step);
+          probes[i].print_probe_movement(step, atoms, n_atoms, target_xyz);
+          probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
+          probes[i].activity_avg=0;
+          probes[i].activity_count=0;
         }
       }
 
@@ -699,14 +712,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
             target_xyz[1]+=getPosition(target_j[j])[1]/n_target;
             target_xyz[2]+=getPosition(target_j[j])[2]/n_target;
           }
-         }
-
-         for (unsigned i=0; i<nprobes;i++)
-         {
-          // Get coordinates of the reference atom
-          unsigned j = init_j[i];
-          probes[i].print_probe_xyz(step);
-          probes[i].print_probe_movement(step, atoms, n_atoms, target_xyz);
          }
        }
       
