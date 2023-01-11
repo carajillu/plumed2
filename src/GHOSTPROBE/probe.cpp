@@ -39,8 +39,7 @@ Probe::Probe(unsigned Probe_id,
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
-  //
-  r_target=INFINITY;
+
   //allocate vectors
   rx=vector<double>(n_atoms,0);
   ry=vector<double>(n_atoms,0);
@@ -82,7 +81,6 @@ Probe::Probe(unsigned Probe_id,
   centroid0=vector<double>(3,0);
 
   activity=0;
-  activity_0=0;
   d_activity_dx=vector<double>(n_atoms,0);
   d_activity_dy=vector<double>(n_atoms,0);
   d_activity_dz=vector<double>(n_atoms,0);
@@ -112,7 +110,7 @@ void Probe::calc_pert()
    xyz_pert[i]=random_double(-1,1);
   }
   double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
-  double k=Kpert/norm;
+  double k=Kpert*(1-activity_avg)/norm;
 
   xyz_pert[0]*=k;
   xyz_pert[1]*=k;
@@ -122,66 +120,26 @@ void Probe::calc_pert()
   xyz[2]+=xyz_pert[2];
 }
 
-void Probe::perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
+void Probe::perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
-  if (step==0)
+  dxcalc=false;
+  activity_avg/=activity_count;
+  activity=0;
+  ptries=0;
+  xyz0=xyz;
+  while (activity==0)
   {
-    calc_pert();
-    return;
+   xyz=xyz0;
+   if (ptries>50)
+    {
+     break;
+    }
+   calc_pert();
+   calculate_activity(atoms_x,atoms_y,atoms_z);
+   ptries++;
   }
-  dxcalc=false; // switch off derivatives calculation during the perturbation trials
-  activity_0=activity;
-  calculate_activity(atoms_x,atoms_y,atoms_z);
-  if (activity>activity_0)
-  {
-     mc_accept=0;
-     dxcalc=true;
-     return;
-  }
-  else
-  {
-     xyz0=xyz;
-     activity=0;
-     ptries=0;
-     while (activity==0)
-     {
-      calc_pert();
-      calculate_activity(atoms_x,atoms_y,atoms_z);
-      if (activity==0)
-         xyz=xyz0;
-         ptries++;
-      if (ptries>50)
-      {
-         xyz=xyz0;
-         dxcalc=true;
-         return;
-      }
-     }
-     if (activity>activity_0)
-     {
-      mc_accept=2;
-      dxcalc=true;
-      return;
-     }
-     else
-     {
-      double R=random_double(-1,0);
-      double mc=activity-activity_0;
-      if (mc>=R)
-      {
-      mc_accept=1;
-       dxcalc=true;
-       return;
-      }
-      else
-      {
-       mc_accept=-1;
-       xyz=xyz0;
-       dxcalc=true;
-       return;
-      }
-     }
-  }
+  dxcalc=true;
+  return;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -309,6 +267,8 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  activity=C*P;
  if (dxcalc)
  {
+  activity_avg+=activity;
+  activity_count++;
   for (unsigned j=0; j<n_atoms;j++)
   {
    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
@@ -394,7 +354,6 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
 
 void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
 {
-  r_target=sqrt(pow((xyz[0]-target_xyz[0]),2)+pow((xyz[1]-target_xyz[1]),2)+pow((xyz[2]-target_xyz[2]),2));
   string filename = "probe-";
   filename.append(to_string(probe_id));
   //filename.append("-step-");
@@ -405,7 +364,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
   if (step==0)
   {
    wfile.open(filename.c_str());
-   wfile << "ID Step r_target min_r_serial min_r enclosure P clash C activity mc_accept activity_0" << endl;
+   wfile << "ID Step min_r_serial min_r enclosure P clash C activity activity_avg" << endl;
   }
   else
    wfile.open(filename.c_str(),std::ios_base::app);
@@ -416,10 +375,10 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << probe_id << " " << step << " " << r_target << " "<< atoms[j_min_r].serial() << " " << min_r << " " 
+  wfile << probe_id << " " << step << " " << atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
-        << activity << " "<< mc_accept <<" " << activity_0 << endl;
+        << activity << " "<< activity_avg << endl;
   wfile.close();
 }
 

@@ -71,7 +71,6 @@ class Probe
   //C=S_off(total_clash)
   void calculate_C();
 
-
   //coordinates
   vector<double> xyz;
   vector<double> centroid;
@@ -95,7 +94,6 @@ class Probe
   unsigned ptries;
   int mc_accept;
   void calc_pert();
-
  public:
     Probe(unsigned Probe_id, 
           double RMin, double DeltaRmin, 
@@ -106,14 +104,14 @@ class Probe
           unsigned init_j);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe(unsigned step, vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
+    void perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
     double activity;
-    double activity_0; // activity at step n-1 
-    double r_target; //distance between the probe and the target region (if not specified, r_target=INFINITY)
+    double activity_avg;
+    double activity_count;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
