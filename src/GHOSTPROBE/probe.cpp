@@ -23,10 +23,8 @@ Probe::Probe(unsigned Probe_id,
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
             double psimin, double deltapsi, 
-            unsigned N_atoms, double kpert, 
-            unsigned Init_j)
+            unsigned N_atoms, double kpert)
 {
-  init_j=Init_j;
   probe_id=Probe_id;
   dxcalc=true;
   n_atoms=N_atoms;
@@ -75,7 +73,6 @@ Probe::Probe(unsigned Probe_id,
   xyz=vector<double>(3,0);
   xyz_pert=vector<double>(3,0);
   xyz0=vector<double>(3,0);
-  ptries=0;
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
@@ -105,41 +102,11 @@ void Probe::place_probe(double x, double y, double z)
 
 void Probe::calc_pert()
 {
- for (unsigned i=0; i<3;i++)
-  {
-   xyz_pert[i]=random_double(-1,1);
-  }
-  double norm=sqrt(pow(xyz_pert[0],2)+pow(xyz_pert[1],2)+pow(xyz_pert[2],2));
-  double k=Kpert*(1-activity_avg)/norm;
-
-  xyz_pert[0]*=k;
-  xyz_pert[1]*=k;
-  xyz_pert[2]*=k;
-  xyz[0]+=xyz_pert[0];
-  xyz[1]+=xyz_pert[1];
-  xyz[2]+=xyz_pert[2];
+ 
 }
 
 void Probe::perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
-  dxcalc=false;
-  activity_avg/=activity_count;
-  activity=0;
-  ptries=0;
-  xyz0=xyz;
-  while (activity==0)
-  {
-   xyz=xyz0;
-   if (ptries>50)
-    {
-     break;
-    }
-   calc_pert();
-   calculate_activity(atoms_x,atoms_y,atoms_z);
-   ptries++;
-  }
-  dxcalc=true;
-  return;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -267,8 +234,6 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  activity=C*P;
  if (dxcalc)
  {
-  activity_avg+=activity;
-  activity_count++;
   for (unsigned j=0; j<n_atoms;j++)
   {
    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
@@ -352,7 +317,7 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
-void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz)
+void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
 {
   string filename = "probe-";
   filename.append(to_string(probe_id));
@@ -364,7 +329,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
   if (step==0)
   {
    wfile.open(filename.c_str());
-   wfile << "ID Step min_r_serial min_r enclosure P clash C activity activity_avg" << endl;
+   wfile << "ID Step min_r_serial min_r enclosure P clash C activity" << endl;
   }
   else
    wfile.open(filename.c_str(),std::ios_base::app);
@@ -378,7 +343,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
   wfile << probe_id << " " << step << " " << atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
-        << activity << " "<< activity_avg << endl;
+        << activity << endl;
   wfile.close();
 }
 

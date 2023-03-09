@@ -11,7 +11,6 @@ class Probe
 {
  private:
   //parameters
-  unsigned n_atoms;
   double Rmin; // mind below which an atom is considered to be clashing with the probe 
   double deltaRmin; // interval over which contact terms are turned on and off
   double Rmax; // distance above which an atom is considered to be too far away from the probe*
@@ -21,12 +20,10 @@ class Probe
   double Pmin; // packing factor below which depth term equals 0
   double deltaP; // interval over which depth term turns from 0 to 1
   double Kpert;
-  double theta;
   
   //stuff
-
+  unsigned n_atoms;
   unsigned probe_id;
-  unsigned init_j; //index j of atom on which the probe is centered at the beginning
   bool dxcalc; // avoid derivative calculation when perturbing probe
 
   vector<double> rx;
@@ -54,7 +51,6 @@ class Probe
   vector<double> dP_dx;
   vector<double> dP_dy;
   vector<double> dP_dz;
-  //P=S_on(total_enclosure)
   void calculate_P(); 
 
   vector<double> clash;
@@ -91,8 +87,6 @@ class Probe
   // for probe perturbation
   vector<double> xyz_pert;
   vector<double> xyz0;
-  unsigned ptries;
-  int mc_accept;
   void calc_pert();
  public:
     Probe(unsigned Probe_id, 
@@ -100,8 +94,7 @@ class Probe
           double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
-          unsigned N_atoms, double kpert, 
-          unsigned init_j);
+          unsigned N_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
     void perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
@@ -110,14 +103,12 @@ class Probe
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
 
     double activity;
-    double activity_avg;
-    double activity_count;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
     void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
-    void print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms, vector<double> target_xyz);
+    void print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);
     void print_probe_xyz(int step);
 };
 #endif

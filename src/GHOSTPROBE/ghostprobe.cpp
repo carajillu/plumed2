@@ -83,11 +83,6 @@ namespace PLMD
       unsigned n_init=0;                     // number of atoms used in ATOMS_INIT
       vector<unsigned> init_j;             // Indices of atoms_init in getPositions()
 
-      vector<PLMD::AtomNumber> atoms_target; // Indices of the atoms defining target region
-      unsigned n_target=0;                     // number of atoms used in ATOMS_TARGET
-      vector<unsigned> target_j;             // Indices of atoms_target in getPositions()
-      vector<double> target_xyz;
-
       vector<Probe> probes; // This will contain all the spherical probes
       unsigned nprobes=0;     // number of spherical probes to use
 
@@ -128,8 +123,8 @@ namespace PLMD
       void reset();
       void correct_derivatives();
       void print_protein();
+      void get_init_crd();
       static void registerKeywords(Keywords &keys);
-      void get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
     };
 
     PLUMED_REGISTER_ACTION(Ghostprobe, "GHOSTPROBE")
@@ -141,14 +136,11 @@ namespace PLMD
       keys.addFlag("NOCVCALC", false, "skip CV calculation");
       keys.addFlag("NOUPDATE", false, "skip probe update");
       keys.addFlag("NODXFIX", false, "skip derivative correction");
-      keys.addFlag("TABOO", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
       keys.addFlag("DUMPDERIVATIVES", false, "print derivatives and corrections");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
-      keys.add("atoms", "ATOMS_TARGET", "Atoms that define the target region.");
       keys.add("optional", "NPROBES", "Number of probes to use");
-      keys.add("optional", "RPROBE", "Radius of every probe in nm");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
       keys.add("optional", "RMIN", "");
       keys.add("optional", "DELTARMIN", "");
@@ -201,10 +193,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseAtomList("ATOMS_INIT", atoms_init);
       n_init = atoms_init.size();
 
-      parseAtomList("ATOMS_TARGET", atoms_target);
-      n_target = atoms_target.size();
-      target_xyz=vector<double>(3,INFINITY);
-
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
@@ -241,31 +229,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           else
           {
             init_j.push_back(j_idx);
-          }
-        }
-      }
-    
-    /*
-      The following bit checks if ATOMS_TARGET has been specified.
-      If so, those atoms will be added to vector<PLMD::AtomNumber> atoms
-      */ 
-      
-      if (n_target!=0)
-      {
-        cout << "Target region is defined by atoms: " << endl;
-        for (unsigned j=0;j<n_target; j++)
-        {
-          cout << atoms_target[j].index() << endl;
-          int j_idx=aidefunctions::findIndex(atoms,atoms_target[j]);
-          if (j_idx==-1)
-          {
-            cout << "Atom " << atoms_target[j].index() << " not found in ATOMS or ATOMS_INIT. Adding it." << endl;
-            atoms.push_back(atoms_target[j]);
-            target_j.push_back(atoms.size()-1);
-          }
-          else
-          {
-            target_j.push_back(j_idx);
           }
         }
       }
@@ -326,7 +289,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         kpert=0.001;
       }
-      cout << "Perturbations of " << kpert << " nm will be applied to all probes every " << pertstride << " steps." << endl;
+      cout << "Perturbations of " << kpert << " nm will be applied to all probes." << endl;
       
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -335,8 +298,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
                                Rmax, deltaRmax, 
                                Cmin, deltaC, 
                                Pmin, deltaP, 
-                               n_atoms, kpert,
-                               init_j[i]));
+                               n_atoms, kpert));
         cout << "Probe " << i << " initialised" << endl;
       }
 
@@ -349,7 +311,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       checkRead();
 
-      // Allocate space for atom coordinates and masses
+      // Allocate space for atom coordinates
 
       atoms_x = vector<double>(n_atoms, 0);
       atoms_y = vector<double>(n_atoms, 0);
@@ -582,7 +544,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
      wfile.close();
     }
 
-    void Ghostprobe::get_init_crd(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
+    void Ghostprobe::get_init_crd()
     {
       double x=0;
       double y=0;
@@ -641,7 +603,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       // At step 0, place the probes using get_init_crd()
       if (step==0)
-         get_init_crd(atoms_x,atoms_y,atoms_z);
+         get_init_crd();
 
       #pragma omp parallel for 
       for (unsigned i = 0; i < nprobes; i++)
@@ -654,9 +616,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
         else
         {
-          get_init_crd(atoms_x,atoms_y,atoms_z);
+          get_init_crd();
         }
         
+        // Apply probe perturbation at every step
+        probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
+
         //Calculate Psi and its derivatives
         if (!nocvcalc)
         {
@@ -675,12 +640,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
         if (step%probestride==0)
         {
-          probes[i].activity_avg/=probes[i].activity_count;
           probes[i].print_probe_xyz(step);
-          probes[i].print_probe_movement(step, atoms, n_atoms, target_xyz);
-          probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
-          probes[i].activity_avg=0;
-          probes[i].activity_count=0;
+          probes[i].print_probe_movement(step, atoms, n_atoms);
         }
       }
 
@@ -701,18 +662,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        if (step % probestride == 0)
        {
          print_protein();
-         if (n_target!=0)
-         {
-          target_xyz[0]=0;
-          target_xyz[1]=0;
-          target_xyz[2]=0;
-          for (unsigned j=0; j<n_target; j++)
-          {
-            target_xyz[0]+=getPosition(target_j[j])[0]/n_target;
-            target_xyz[1]+=getPosition(target_j[j])[1]/n_target;
-            target_xyz[2]+=getPosition(target_j[j])[2]/n_target;
-          }
-         }
        }
       
       if (performance)
