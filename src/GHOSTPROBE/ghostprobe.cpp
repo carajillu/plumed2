@@ -558,7 +558,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           y=getPosition(init_j[i])[1];
           z=getPosition(init_j[i])[2];
           probes[i].place_probe(x,y,z);
-          probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
+          probes[i].perturb_probe();
           cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
         }
       }
@@ -602,25 +602,19 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
 
       // At step 0, place the probes using get_init_crd()
-      if (step==0)
+      if (step==0 or noupdate)
          get_init_crd();
 
       #pragma omp parallel for 
       for (unsigned i = 0; i < nprobes; i++)
       {
-        
         // Update probe coordinates
         if (!noupdate)
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
         }
-        else
-        {
-          get_init_crd();
-        }
-        
-        // Apply probe perturbation at every step
-        probes[i].perturb_probe(atoms_x,atoms_y,atoms_z);
+        //perturb probe coordinates  at every step
+        probes[i].perturb_probe();
 
         //Calculate Psi and its derivatives
         if (!nocvcalc)

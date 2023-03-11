@@ -84,10 +84,6 @@ class Probe
   arma::mat R; //rotation matrix
   void kabsch();
 
-  // for probe perturbation
-  vector<double> xyz_pert;
-  vector<double> xyz0;
-  void calc_pert();
  public:
     Probe(unsigned Probe_id, 
           double RMin, double DeltaRmin, 
@@ -97,7 +93,7 @@ class Probe
           unsigned N_atoms, double kpert);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
+    void perturb_probe();
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
@@ -106,6 +102,8 @@ class Probe
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
+    vector<double> d_activity_dprobe;
+
     void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
 
     void print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);

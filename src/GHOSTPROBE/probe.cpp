@@ -71,8 +71,6 @@ Probe::Probe(unsigned Probe_id,
   dP_dz=vector<double>(n_atoms,0);
 
   xyz=vector<double>(3,0);
-  xyz_pert=vector<double>(3,0);
-  xyz0=vector<double>(3,0);
   arma_xyz=arma::mat(1,3,arma::fill::zeros);
   centroid=vector<double>(3,0);
   centroid0=vector<double>(3,0);
@@ -81,6 +79,7 @@ Probe::Probe(unsigned Probe_id,
   d_activity_dx=vector<double>(n_atoms,0);
   d_activity_dy=vector<double>(n_atoms,0);
   d_activity_dz=vector<double>(n_atoms,0);
+  d_activity_dprobe=vector<double>(3,0);
 
   atomcoords_0=arma::mat(n_atoms,3,arma::fill::zeros);
   atomcoords=arma::mat(n_atoms,3,arma::fill::zeros);
@@ -100,13 +99,29 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-void Probe::calc_pert()
+void Probe::perturb_probe()
 {
- 
-}
+  if (activity==1)
+  return;
 
-void Probe::perturb_probe(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
-{
+  if (activity==0)
+  {
+   double rand_x=COREFUNCTIONS::random_double(-1,1);
+   double rand_y=COREFUNCTIONS::random_double(-1,1);
+   double rand_z=COREFUNCTIONS::random_double(-1,1);
+   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
+   xyz[0]+=Kpert/norm*rand_x;
+   xyz[1]+=Kpert/norm*rand_y;
+   xyz[2]+=Kpert/norm*rand_z;
+  }
+  else if (activity>0 and activity<1)
+  {
+   double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
+   xyz[0]+=Kpert/norm*d_activity_dprobe[0];
+   xyz[1]+=Kpert/norm*d_activity_dprobe[1];
+   xyz[2]+=Kpert/norm*d_activity_dprobe[2];
+  }
+  return;
 }
 
 //calculate distance between the center of the probe and the atoms, and all their derivatives
@@ -234,11 +249,21 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  activity=C*P;
  if (dxcalc)
  {
+  d_activity_dprobe[0]=0;
+  d_activity_dprobe[1]=0;
+  d_activity_dprobe[2]=0;
   for (unsigned j=0; j<n_atoms;j++)
   {
    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
    d_activity_dy[j]=C*dP_dy[j]+P*dC_dy[j];
    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
+   //get derivatives with respect of the position of the probe
+   //This assumes that the derivative with respect to the probe
+   //is the negative of the sum of the derivatives with respect
+   //to the atom positions, which I am not yet sure about.
+   d_activity_dprobe[0]-=d_activity_dx[j];
+   d_activity_dprobe[1]-=d_activity_dy[j];
+   d_activity_dprobe[2]-=d_activity_dz[j];
   }
  }
 }
