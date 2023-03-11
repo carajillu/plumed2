@@ -62,7 +62,7 @@ def get_activity(nprobes):
     for i in range(0,nprobes):
         name="P"+str(i).zfill(2)
         filename="probe-"+str(i)+"-stats.csv"
-        activity[name]=pd.read_csv(filename,sep=" ").activity_avg
+        activity[name]=pd.read_csv(filename,sep=" ").activity
     return activity
 
 def print_probes_pdb(probes_trj,activity,activity_min):
