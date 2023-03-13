@@ -82,6 +82,7 @@ def print_probes_pdb(probes_trj,activity,activity_min):
     trj=mdtraj.Trajectory(xyz,top)
     filename="probes_actmin_"+str(activity_min)+".pdb"
     trj.save_pdb(filename,bfactors=bfactors)
+    return trj
 
 if __name__=="__main__":
 
@@ -128,4 +129,4 @@ if __name__=="__main__":
     
     probes_trj=newtraj.atom_slice(newtraj.topology.select("resname PRB"))
     activity=get_activity(args.nprobes)
-    print_probes_pdb(probes_trj,activity,args.actmin)
+    probes_trj=print_probes_pdb(probes_trj,activity,args.actmin)
