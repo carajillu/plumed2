@@ -96,11 +96,10 @@ r: (mxm) np.array with the pairwise distances.
 '''    
 def calc_distance_matrix(xyz):
     r=pymp.shared.array((len(xyz),len(xyz)),dtype=np.float64)
-    with pymp.Parallel() as p:
-        for i in p.range(0,len(xyz)):
-            if p.thread_num==0:
-               print("Calculating distances for point {0} of {1}".format(i,int(len(xyz)/p.num_threads)+1))
-            for j in range(i+1,len(xyz)):
+    for i in range(0,len(xyz)):
+        print("Calculating distances for point {0} of {1}".format(i,len(xyz)))
+        with pymp.Parallel() as p:
+            for j in p.range(i+1,len(xyz)):
                 r[i][j]=np.linalg.norm((xyz[i]-xyz[j]))
                 r[j][i]=r[i][j]
     return r
