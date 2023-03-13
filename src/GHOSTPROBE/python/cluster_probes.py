@@ -29,7 +29,7 @@ if __name__=="__main__":
         xyz=traj_obj.xyz[0][probes_id]
         rmax=np.max(clustering.calc_distance_matrix(xyz))
         if (rmax<args.wmin):
-            filename="cluster"+str(cluster).zfill(3)+"_falsepositive.pdb"
+            filename="falsepositive_cluster"+str(cluster).zfill(3)+".pdb"
         else:
             filename="cluster"+str(cluster).zfill(3)+".pdb"
         for element in xyz:

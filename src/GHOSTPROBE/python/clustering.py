@@ -29,16 +29,16 @@ def laio(r,rmax,delta_min):
     print("Calculating deltas")
     for i in range(0,len(rhodelta)):
         hd=rhodelta.point[rhodelta.rho>rhodelta.rho[i]].values
-        print(hd)
+        #print(hd)
         if len(hd)==0:
             rhodelta.delta[i]=max(r[i])
             rhodelta.nnhd[i]=-1
             continue
         rhd=r[i][hd]
         rhodelta.delta[i]=np.min(rhd)
-        print(rhodelta.rho[i], rhodelta.delta[i])
+        #print(rhodelta.rho[i], rhodelta.delta[i])
         minrhd_i=np.where(rhd==np.min(rhd))[0][0]
-        print(minrhd_i)
+        #print(minrhd_i)
         rhodelta.nnhd[i]=hd[minrhd_i]
 
     #choose cluster centers
@@ -96,10 +96,11 @@ r: (mxm) np.array with the pairwise distances.
 '''    
 def calc_distance_matrix(xyz):
     r=pymp.shared.array((len(xyz),len(xyz)),dtype=np.float64)
-    for i in range(0,len(xyz)):
-        print("Calculating distances for point {0} of {1}".format(i,len(xyz)))
-        with pymp.Parallel() as p:
-            for j in p.range(i+1,len(xyz)):
+    with pymp.Parallel() as p:
+        for i in p.range(0,len(xyz)):
+            if p.thread_num==0:
+               print("Calculating distances for point {0} of {1}".format(i,int(len(xyz)/p.num_threads)+1))
+            for j in range(i+1,len(xyz)):
                 r[i][j]=np.linalg.norm((xyz[i]-xyz[j]))
                 r[j][i]=r[i][j]
     return r
