@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import pymp
 import warnings
+import sys
 warnings.simplefilter(action='ignore')
 
 '''
@@ -36,8 +37,12 @@ def laio(r,rmax,delta_min):
             continue
         rhd=r[i][hd]
         rhodelta.delta[i]=np.min(rhd)
-        #print(rhodelta.rho[i], rhodelta.delta[i])
-        minrhd_i=np.where(rhd==np.min(rhd))[0][0]
+        minrhd_i=np.where(rhd==np.min(rhd))[0]
+        if (len(minrhd_i)==1):
+            minrhd_i=minrhd_i[0]
+        else:
+            rhos=rhodelta.rho[minrhd_i].values
+            minrhd_i=minrhd_i[np.where(rhos==np.max(rhos))]   
         #print(minrhd_i)
         rhodelta.nnhd[i]=hd[minrhd_i]
 
