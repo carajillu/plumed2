@@ -110,8 +110,6 @@ namespace PLMD
       arma::mat A;
       arma::mat Aplus;
       arma::vec P;
-      vector<double> sum_P;
-      vector<double> sum_rcrossP;
       //for when correction of derivatives fails
       double err_tol=0.00000001; //1e-8
       bool dumpderivatives;
@@ -337,8 +335,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         Aplus = arma::mat(nrows, ncols);
         L = arma::vec(nrows);
         P = arma::vec(ncols);
-        sum_P = vector<double>(3, 0);
-        sum_rcrossP = vector<double>(3, 0);
       }
       else
       {
@@ -366,8 +362,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       sum_t_dz = 0;
       fill(L.begin(), L.end(), 0);
       fill(P.begin(), P.end(), 0);
-      fill(sum_P.begin(), sum_P.end(), 0);
-      fill(sum_rcrossP.begin(), sum_rcrossP.end(), 0);
     }
 
     void Ghostprobe::correct_derivatives()
@@ -377,14 +371,17 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         ofstream wfile;
         wfile.open("derivatives.csv");
-        wfile << "Step Derivative correction corrected_derivative" << endl;
+        wfile << "Step " << 
+                 "dx correction_dx corrected_dx " << 
+                 "dy correction_dy corrected_dy " << 
+                 "dz correction_dz corrected_dz" << endl;
         wfile.close();
       }
       // auto point0=high_resolution_clock::now();
       // step 0: calculate sums of derivatives and sums of torques in each direction
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        sum_d_dx += d_Psi_dx[j];
+        sum_d_dx += d_Psi_dx[j];  
         sum_d_dy += d_Psi_dy[j];
         sum_d_dz += d_Psi_dz[j];
 
@@ -446,16 +443,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       P = Aplus * L;
 
       // auto point4=high_resolution_clock::now();
-      for (unsigned j = 0; j < n_atoms; j++)
-      {
-        sum_P[0] += P[j + 0 * n_atoms];
-        sum_P[1] += P[j + 1 * n_atoms];
-        sum_P[2] += P[j + 2 * n_atoms];
-
-        sum_rcrossP[0] += atoms_y[j] * P[j + 2 * n_atoms] - atoms_z[j] * P[j + 1 * n_atoms];
-        sum_rcrossP[0] += atoms_z[j] * P[j + 0 * n_atoms] - atoms_x[j] * P[j + 2 * n_atoms];
-        sum_rcrossP[0] += atoms_x[j] * P[j + 1 * n_atoms] - atoms_y[j] * P[j + 0 * n_atoms];
-      }
 
       // step5 jedi.cpp
       for (unsigned j = 0; j < n_atoms; j++)
@@ -464,9 +451,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         {
          ofstream wfile;
          wfile.open("derivatives.csv",std::ios_base::app);
-         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << endl;
-         wfile << step << " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << endl;
-         wfile << step << " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
+         wfile << setprecision(16); //need to save all significant figures for python postprocessing!
+         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << 
+                          " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << 
+                          " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
          wfile.close(); 
         }
         d_Psi_dx[j] += P[j + 0 * n_atoms];
@@ -489,6 +477,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        sum_d_dx+=d_Psi_dx[j];
        sum_d_dy+=d_Psi_dy[j];
        sum_d_dz+=d_Psi_dz[j];
+       cout << j << " " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << endl; 
 
        sum_t_dx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
        sum_t_dy+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
