@@ -435,8 +435,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       // auto point2=high_resolution_clock::now();
       // step3 jedi.cpp
-      Aplus = arma::pinv(A);
-      
+      //Aplus = arma::trans(A)*arma::pinv(A*arma::trans(A),0.0);
+      Aplus=arma::pinv(A);
 
       // auto point3=high_resolution_clock::now();
       // step4 jedi.cpp
@@ -477,8 +477,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        sum_d_dx+=d_Psi_dx[j];
        sum_d_dy+=d_Psi_dy[j];
        sum_d_dz+=d_Psi_dz[j];
-       cout << j << " " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << endl; 
-
        sum_t_dx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
        sum_t_dy+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
        sum_t_dz+=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
