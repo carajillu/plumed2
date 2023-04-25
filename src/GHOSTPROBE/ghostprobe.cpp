@@ -104,14 +104,12 @@ namespace PLMD
       double sum_t_dy;
       double sum_t_dz;
 
-      arma::vec L;
-      unsigned nrows=0;
-      unsigned ncols=0;
       arma::mat A;
       arma::mat Aplus;
-      arma::vec P;
+      arma::vec c;
+      arma::vec zero;
       //for when correction of derivatives fails
-      double err_tol=0.00000001; //1e-8
+      double err_tol=0.00001;
       bool dumpderivatives;
 
     public:
@@ -329,12 +327,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         cout << "---------Initialisng correction of Ghostprobe derivatives---------" << endl;
 
         // L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
-        nrows = 6;
-        ncols = 3 * n_atoms;
-        A = arma::mat(nrows, ncols);
-        Aplus = arma::mat(nrows, ncols);
-        L = arma::vec(nrows);
-        P = arma::vec(ncols);
+        A = arma::mat(6,n_atoms);
+        Aplus=arma::mat(6,n_atoms);
+        c = arma::vec(n_atoms);
+        zero=arma::vec(6);
+        fill(zero.begin(),zero.end(),err_tol);
       }
       else
       {
@@ -353,15 +350,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(d_Psi_dx.begin(), d_Psi_dx.end(), 0);
       fill(d_Psi_dy.begin(), d_Psi_dy.end(), 0);
       fill(d_Psi_dz.begin(), d_Psi_dz.end(), 0);
-
       sum_d_dx = 0;
       sum_d_dy = 0;
       sum_d_dz = 0;
       sum_t_dx = 0;
       sum_t_dy = 0;
       sum_t_dz = 0;
-      fill(L.begin(), L.end(), 0);
-      fill(P.begin(), P.end(), 0);
+      fill(c.begin(),c.end(),err_tol);
     }
 
     void Ghostprobe::correct_derivatives()
@@ -371,115 +366,46 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         ofstream wfile;
         wfile.open("derivatives.csv");
-        wfile << "Step " << 
-                 "dx correction_dx corrected_dx " << 
-                 "dy correction_dy corrected_dy " << 
-                 "dz correction_dz corrected_dz" << endl;
+        wfile << "Step Atom dx dy dx tx ty tz correction" << endl;
         wfile.close();
       }
-      // auto point0=high_resolution_clock::now();
-      // step 0: calculate sums of derivatives and sums of torques in each direction
-      for (unsigned j = 0; j < n_atoms; j++)
+      
+      #pragma omp parallel for
+      for (unsigned j=0; j<n_atoms; j++)
       {
-        sum_d_dx += d_Psi_dx[j];  
-        sum_d_dy += d_Psi_dy[j];
-        sum_d_dz += d_Psi_dz[j];
-
-        sum_t_dx += atoms_y[j] * d_Psi_dz[j] - atoms_z[j] * d_Psi_dy[j];
-        sum_t_dy += atoms_z[j] * d_Psi_dx[j] - atoms_x[j] * d_Psi_dz[j];
-        sum_t_dz += atoms_x[j] * d_Psi_dy[j] - atoms_y[j] * d_Psi_dx[j];
+        A.row(0).col(j)=d_Psi_dx[j];
+        A.row(1).col(j)=d_Psi_dy[j];
+        A.row(2).col(j)=d_Psi_dz[j];
+        A.row(3).col(j)=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
+        A.row(4).col(j)=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
+        A.row(5).col(j)=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
       }
-      L[0] = -sum_d_dx;
-      L[1] = -sum_d_dy;
-      L[2] = -sum_d_dz;
-      L[3] = -sum_t_dx;
-      L[4] = -sum_t_dy;
-      L[5] = -sum_t_dz;
+      
+      Aplus=pinv(A);
+      c=Aplus*zero;
 
-// only for debugging
-// cout << "Before: " << L[0] << " " << L[1] << " " << L[2] << " " << L[3] << " "<< L[4] << " "<< L[5] << endl;
-
-// step2 jedi.cpp
-// auto point1=high_resolution_clock::now();
-#pragma omp parallel for
-      for (unsigned j = 0; j < ncols; j++)
-      {
-        if (j < n_atoms)
-        {
-          A.row(0).col(j) = 1.0;
-          A.row(1).col(j) = 0.0;
-          A.row(2).col(j) = 0.0;
-          A.row(3).col(j) = 0.0;
-          A.row(4).col(j) = atoms_z[j];
-          A.row(5).col(j) = -atoms_y[j];
-        }
-        else if (j < 2 * n_atoms)
-        {
-          A.row(0).col(j) = 0.0;
-          A.row(1).col(j) = 1.0;
-          A.row(2).col(j) = 0.0;
-          A.row(3).col(j) = -atoms_z[j - n_atoms];
-          A.row(4).col(j) = 0.0;
-          A.row(5).col(j) = atoms_x[j - n_atoms];
-        }
-        else
-        {
-          A.row(0).col(j) = 0.0;
-          A.row(1).col(j) = 0.0;
-          A.row(2).col(j) = 1.0;
-          A.row(3).col(j) = atoms_y[j - 2 * n_atoms];
-          A.row(4).col(j) = -atoms_x[j - 2 * n_atoms];
-          A.row(5).col(j) = 0.0;
-        }
-      }
-
-      // auto point2=high_resolution_clock::now();
-      // step3 jedi.cpp
-      //Aplus = arma::trans(A)*arma::pinv(A*arma::trans(A),0.0);
-      Aplus=arma::pinv(A);
-
-      // auto point3=high_resolution_clock::now();
-      // step4 jedi.cpp
-      P = Aplus * L;
-
-      // auto point4=high_resolution_clock::now();
-
-      // step5 jedi.cpp
-      for (unsigned j = 0; j < n_atoms; j++)
+      for (unsigned j=0; j<n_atoms; j++)
       {
         if (dumpderivatives and step%probestride==0)
         {
-         ofstream wfile;
-         wfile.open("derivatives.csv",std::ios_base::app);
-         wfile << setprecision(16); //need to save all significant figures for python postprocessing!
-         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << 
-                          " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << 
-                          " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
-         wfile.close(); 
+          ofstream wfile;
+          wfile.open("derivatives.csv",std::ios_base::app);
+          wfile << step << " " << j << " " 
+                << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
+                << as_scalar(A.row(3).col(j)) << " " << as_scalar(A.row(4).col(j)) << " " << as_scalar(A.row(5).col(j)) << " " 
+                << c[j] << endl;      
+          wfile.close();          
         }
-        d_Psi_dx[j] += P[j + 0 * n_atoms];
-        d_Psi_dy[j] += P[j + 1 * n_atoms];
-        d_Psi_dz[j] += P[j + 2 * n_atoms];
-      }
-      // auto point5=high_resolution_clock::now();
+        d_Psi_dx[j]*=c[j];
+        d_Psi_dy[j]*=c[j];
+        d_Psi_dz[j]*=c[j];
 
-      // Only for debugging
-      
-      sum_d_dx=0;
-      sum_d_dy=0;
-      sum_d_dz=0;
-      sum_t_dx=0;
-      sum_t_dy=0;
-      sum_t_dz=0;
-
-      for (unsigned j=0;j<n_atoms;j++)
-      {
-       sum_d_dx+=d_Psi_dx[j];
-       sum_d_dy+=d_Psi_dy[j];
-       sum_d_dz+=d_Psi_dz[j];
-       sum_t_dx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
-       sum_t_dy+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
-       sum_t_dz+=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
+        sum_d_dx+=d_Psi_dx[j];
+        sum_d_dy+=d_Psi_dy[j];
+        sum_d_dz+=d_Psi_dz[j];
+        sum_t_dx+=as_scalar(A.row(3).col(j))*c[j];
+        sum_t_dy+=as_scalar(A.row(4).col(j))*c[j];
+        sum_t_dz+=as_scalar(A.row(5).col(j))*c[j];
       }
 
       if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
@@ -491,23 +417,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       exit(0);
       }
       
-      /*
-      auto duration0 = duration_cast<microseconds>(point1 - point0);
-      auto duration1 = duration_cast<microseconds>(point2 - point1);
-      auto duration2 = duration_cast<microseconds>(point3 - point2);
-      auto duration3 = duration_cast<microseconds>(point4 - point3);
-      auto duration4 = duration_cast<microseconds>(point5 - point4);
-      auto duration5 = duration_cast<microseconds>(point5 - point0);
-      cout << "Duration L = " << duration0.count() << " microseconds" << endl;
-      cout << "Duration A = " << duration1.count() << " microseconds" << endl;
-      cout << "Duration Aplus = " << duration2.count() << " microseconds" << endl;
-      cout << "Duration P = " << duration3.count() << " microseconds" << endl;
-      cout << "Duration Correction = " << duration4.count() << " microseconds" << endl;
-      cout << "Duration Total = " << duration5.count() << " microseconds" << endl;
-
-      exit(0);
-      */
-     //cout << "exiting derivatives correction" << endl;
     }
 
     void Ghostprobe::print_protein()
