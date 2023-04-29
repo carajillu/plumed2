@@ -105,9 +105,11 @@ namespace PLMD
       double sum_t_dz;
 
       arma::mat A;
-      arma::mat Aplus;
-      arma::vec c;
-      arma::vec zero;
+      arma::mat B;
+      arma::mat Bt;
+      arma::mat c;
+      arma::vec u;
+      arma::vec v;
       //for when correction of derivatives fails
       double err_tol=0.00001;
       bool dumpderivatives;
@@ -328,10 +330,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
         // L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
         A = arma::mat(6,n_atoms);
-        Aplus=arma::mat(6,n_atoms);
         c = arma::vec(n_atoms);
-        zero=arma::vec(6);
-        fill(zero.begin(),zero.end(),err_tol);
+        B = arma::mat(n_atoms-6,n_atoms);
+        Bt = arma::mat(n_atoms,n_atoms-6);; 
+        v = arma::vec(n_atoms);
+        fill(v.begin(),v.end(),1);
       }
       else
       {
@@ -356,7 +359,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       sum_t_dx = 0;
       sum_t_dy = 0;
       sum_t_dz = 0;
-      fill(c.begin(),c.end(),err_tol);
     }
 
     void Ghostprobe::correct_derivatives()
@@ -366,7 +368,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         ofstream wfile;
         wfile.open("derivatives.csv");
-        wfile << "Step Atom dx dy dx tx ty tz correction" << endl;
+        wfile << "Step Atom dx dy dz tx ty tz correction" << endl;
         wfile.close();
       }
       
@@ -381,15 +383,18 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         A.row(5).col(j)=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
       }
       
-      Aplus=pinv(A);
-      c=Aplus*zero;
-
+      //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
+      B=arma::null(A);
+      Bt=arma::trans(B);
+      c=(B*pinv(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
+      
       for (unsigned j=0; j<n_atoms; j++)
       {
         if (dumpderivatives and step%probestride==0)
         {
           ofstream wfile;
           wfile.open("derivatives.csv",std::ios_base::app);
+          wfile << setprecision(16);
           wfile << step << " " << j << " " 
                 << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
                 << as_scalar(A.row(3).col(j)) << " " << as_scalar(A.row(4).col(j)) << " " << as_scalar(A.row(5).col(j)) << " " 
