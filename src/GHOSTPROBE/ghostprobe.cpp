@@ -97,6 +97,11 @@ namespace PLMD
       vector<double> d_Psi_dz;
 
       // Correction of derivatives
+      vector<double> tx;
+      vector<double> ty;
+      vector<double> tz;
+      vector<bool> dxnonull;
+      unsigned dxnonull_size;
       double sum_d_dx;
       double sum_d_dy;
       double sum_d_dz;
@@ -327,8 +332,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (!nodxfix)
       {
         cout << "---------Initialisng correction of Ghostprobe derivatives---------" << endl;
-
-        // L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
+        tx=vector<double>(n_atoms,0);
+        ty=vector<double>(n_atoms,0);
+        tz=vector<double>(n_atoms,0);
+        dxnonull=vector<bool>(n_atoms,false);
+        dxnonull_size=0;
         A = arma::mat(6,n_atoms);
         c = arma::vec(n_atoms);
         B = arma::mat(n_atoms-6,n_atoms);
@@ -353,6 +361,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(d_Psi_dx.begin(), d_Psi_dx.end(), 0);
       fill(d_Psi_dy.begin(), d_Psi_dy.end(), 0);
       fill(d_Psi_dz.begin(), d_Psi_dz.end(), 0);
+      fill(dxnonull.begin(), dxnonull.end(), false);
+      dxnonull_size=0;
+      fill(tx.begin(),tx.end(),0);
+      fill(ty.begin(),ty.end(),0);
+      fill(tz.begin(),tz.end(),0);
       sum_d_dx = 0;
       sum_d_dy = 0;
       sum_d_dz = 0;
@@ -371,25 +384,51 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         wfile << "Step Atom dx dy dz tx ty tz correction" << endl;
         wfile.close();
       }
-      
-      #pragma omp parallel for
-      for (unsigned j=0; j<n_atoms; j++)
+
+      //cout << "Calculating torques" << endl;
+      for (unsigned j=0; j<n_atoms;j++)
       {
-        A.row(0).col(j)=d_Psi_dx[j];
-        A.row(1).col(j)=d_Psi_dy[j];
-        A.row(2).col(j)=d_Psi_dz[j];
-        A.row(3).col(j)=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
-        A.row(4).col(j)=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
-        A.row(5).col(j)=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
+        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
+           continue;
+        tx[j]=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
+        ty[j]=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
+        tz[j]=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
+        dxnonull[j]=true;
+        dxnonull_size++;
       }
       
+      //cout << "Generating matrices" << endl;
+      A=arma::mat(6,dxnonull_size);
+      c=arma::vec(dxnonull_size);
+      v=arma::vec(dxnonull_size);
+      fill(v.begin(),v.end(),1);
+
+      unsigned k=0;
+      for (unsigned j=0; j<n_atoms; j++)
+      {
+        if (!dxnonull[j])
+            continue;
+        A.row(0).col(k)=d_Psi_dx[j];
+        A.row(1).col(k)=d_Psi_dy[j];
+        A.row(2).col(k)=d_Psi_dz[j];
+        A.row(3).col(k)=tx[j];
+        A.row(4).col(k)=ty[j];
+        A.row(5).col(k)=tz[j];
+        k++;
+      }
+      
+      //cout << "Matrix ops" << endl;
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
       B=arma::null(A);
       Bt=arma::trans(B);
       c=(B*pinv(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
+      //cout << "Assigning correction" << endl;
+      k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
+        if (!dxnonull[j])
+           continue;
         if (dumpderivatives and step%probestride==0)
         {
           ofstream wfile;
@@ -397,20 +436,28 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           wfile << setprecision(16);
           wfile << step << " " << j << " " 
                 << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
-                << as_scalar(A.row(3).col(j)) << " " << as_scalar(A.row(4).col(j)) << " " << as_scalar(A.row(5).col(j)) << " " 
-                << c[j] << endl;      
+                << as_scalar(A.row(3).col(k)) << " " << as_scalar(A.row(4).col(k)) << " " << as_scalar(A.row(5).col(k)) << " " 
+                << c[k] << endl;      
           wfile.close();          
         }
-        d_Psi_dx[j]*=c[j];
-        d_Psi_dy[j]*=c[j];
-        d_Psi_dz[j]*=c[j];
+        d_Psi_dx[j]*=c[k];
+        d_Psi_dy[j]*=c[k];
+        d_Psi_dz[j]*=c[k];
+        tx[j]*=c[k];
+        ty[j]*=c[k];
+        tz[j]*=c[k];
+        k++;
+      }
 
+      //cout << "checking that correction worked" << endl;
+      for (unsigned j=0; j<n_atoms; j++)
+      {
         sum_d_dx+=d_Psi_dx[j];
         sum_d_dy+=d_Psi_dy[j];
         sum_d_dz+=d_Psi_dz[j];
-        sum_t_dx+=as_scalar(A.row(3).col(j))*c[j];
-        sum_t_dy+=as_scalar(A.row(4).col(j))*c[j];
-        sum_t_dz+=as_scalar(A.row(5).col(j))*c[j];
+        sum_t_dx+=tx[j];
+        sum_t_dy+=ty[j];
+        sum_t_dz+=tz[j];
       }
 
       if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
@@ -421,7 +468,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "Sum torques: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
       exit(0);
       }
-      
+      //cout << "exiting derivatives correction" << endl;
     }
 
     void Ghostprobe::print_protein()
