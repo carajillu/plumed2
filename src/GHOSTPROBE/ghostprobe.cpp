@@ -97,22 +97,23 @@ namespace PLMD
       vector<double> d_Psi_dz;
 
       // Correction of derivatives
-      double sum_d_dx;
-      double sum_d_dy;
-      double sum_d_dz;
-      double sum_t_dx;
-      double sum_t_dy;
-      double sum_t_dz;
-
-      arma::vec L;
-      unsigned nrows=0;
-      unsigned ncols=0;
-      arma::mat A;
-      arma::mat Aplus;
-      arma::vec P;
-      //for when correction of derivatives fails
-      double err_tol=0.00000001; //1e-8
       bool dumpderivatives;
+      double err_tol=0.00000000001;
+      vector<bool> dxnonull;
+      unsigned dxnonull_total;
+      vector<double> tx;
+      vector<double> ty;
+      vector<double> tz;
+      double sum_dx;
+      double sum_dy;
+      double sum_dz;
+      double sum_tx;
+      double sum_ty;
+      double sum_tz;
+      arma::vec L;
+
+
+
 
     public:
       explicit Ghostprobe(const ActionOptions &);
@@ -327,14 +328,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (!nodxfix)
       {
         cout << "---------Initialisng correction of Ghostprobe derivatives---------" << endl;
-
-        // L=vector<double>(6,0); //sums of derivatives and sums torques in each direction
-        nrows = 6;
-        ncols = 3 * n_atoms;
-        A = arma::mat(nrows, ncols);
-        Aplus = arma::mat(nrows, ncols);
-        L = arma::vec(nrows);
-        P = arma::vec(ncols);
+        dxnonull_total=0;
+        dxnonull=vector<bool>(n_atoms,false);
+        tx=vector<double>(n_atoms,0);
+        ty=vector<double>(n_atoms,0);
+        tz=vector<double>(n_atoms,0);
+        L=arma::vec(6);
       }
       else
       {
@@ -354,14 +353,17 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(d_Psi_dy.begin(), d_Psi_dy.end(), 0);
       fill(d_Psi_dz.begin(), d_Psi_dz.end(), 0);
 
-      sum_d_dx = 0;
-      sum_d_dy = 0;
-      sum_d_dz = 0;
-      sum_t_dx = 0;
-      sum_t_dy = 0;
-      sum_t_dz = 0;
-      fill(L.begin(), L.end(), 0);
-      fill(P.begin(), P.end(), 0);
+      fill(dxnonull.begin(),dxnonull.end(),false);
+      dxnonull_total=0;
+      fill(tx.begin(), tx.end(), 0);
+      fill(ty.begin(), ty.end(), 0);
+      fill(tz.begin(), tz.end(), 0);
+      sum_dx = 0;
+      sum_dy = 0;
+      sum_dz = 0;
+      sum_tx = 0;
+      sum_ty = 0;
+      sum_tz = 0;
     }
 
     void Ghostprobe::correct_derivatives()
@@ -371,123 +373,126 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         ofstream wfile;
         wfile.open("derivatives.csv");
-        wfile << "Step " << 
+        wfile << "Step Atom " << 
                  "dx correction_dx corrected_dx " << 
                  "dy correction_dy corrected_dy " << 
                  "dz correction_dz corrected_dz" << endl;
         wfile.close();
       }
+
       // auto point0=high_resolution_clock::now();
-      // step 0: calculate sums of derivatives and sums of torques in each direction
+
+      //cout << "Step 1: calculate sums of derivatives and sums of torques in each direction" << endl;
       for (unsigned j = 0; j < n_atoms; j++)
       {
-        sum_d_dx += d_Psi_dx[j];  
-        sum_d_dy += d_Psi_dy[j];
-        sum_d_dz += d_Psi_dz[j];
+        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
+            continue;
+        dxnonull[j]=true;
+        dxnonull_total++;
 
-        sum_t_dx += atoms_y[j] * d_Psi_dz[j] - atoms_z[j] * d_Psi_dy[j];
-        sum_t_dy += atoms_z[j] * d_Psi_dx[j] - atoms_x[j] * d_Psi_dz[j];
-        sum_t_dz += atoms_x[j] * d_Psi_dy[j] - atoms_y[j] * d_Psi_dx[j];
+        tx[j]=atoms_y[j] * d_Psi_dz[j] - atoms_z[j] * d_Psi_dy[j];
+        ty[j]=atoms_z[j] * d_Psi_dx[j] - atoms_x[j] * d_Psi_dz[j];
+        tz[j]=atoms_x[j] * d_Psi_dy[j] - atoms_y[j] * d_Psi_dx[j];
+
+        sum_dx += d_Psi_dx[j];  
+        sum_dy += d_Psi_dy[j];
+        sum_dz += d_Psi_dz[j];
+        sum_tx += tx[j];
+        sum_ty += ty[j];
+        sum_tz += tz[j];
       }
-      L[0] = -sum_d_dx;
-      L[1] = -sum_d_dy;
-      L[2] = -sum_d_dz;
-      L[3] = -sum_t_dx;
-      L[4] = -sum_t_dy;
-      L[5] = -sum_t_dz;
 
-// only for debugging
-// cout << "Before: " << L[0] << " " << L[1] << " " << L[2] << " " << L[3] << " "<< L[4] << " "<< L[5] << endl;
-
-// step2 jedi.cpp
-// auto point1=high_resolution_clock::now();
-#pragma omp parallel for
-      for (unsigned j = 0; j < ncols; j++)
+      //cout << "Step 2: Build matrix A" << endl;
+      unsigned k=0;
+      arma::mat A(6,dxnonull_total*3);
+      for (unsigned j=0; j<n_atoms;j++)
       {
-        if (j < n_atoms)
-        {
-          A.row(0).col(j) = 1.0;
-          A.row(1).col(j) = 0.0;
-          A.row(2).col(j) = 0.0;
-          A.row(3).col(j) = 0.0;
-          A.row(4).col(j) = atoms_z[j];
-          A.row(5).col(j) = -atoms_y[j];
-        }
-        else if (j < 2 * n_atoms)
-        {
-          A.row(0).col(j) = 0.0;
-          A.row(1).col(j) = 1.0;
-          A.row(2).col(j) = 0.0;
-          A.row(3).col(j) = -atoms_z[j - n_atoms];
-          A.row(4).col(j) = 0.0;
-          A.row(5).col(j) = atoms_x[j - n_atoms];
-        }
-        else
-        {
-          A.row(0).col(j) = 0.0;
-          A.row(1).col(j) = 0.0;
-          A.row(2).col(j) = 1.0;
-          A.row(3).col(j) = atoms_y[j - 2 * n_atoms];
-          A.row(4).col(j) = -atoms_x[j - 2 * n_atoms];
-          A.row(5).col(j) = 0.0;
-        }
+        if (!dxnonull[j])
+           continue;
+
+        A.row(0).col(k+0*dxnonull_total) = 1.0;
+        A.row(1).col(k+0*dxnonull_total) = 0.0;
+        A.row(2).col(k+ 0*dxnonull_total) = 0.0;
+        A.row(3).col(k+ 0*dxnonull_total) = 0.0;
+        A.row(4).col(k+ 0*dxnonull_total) = atoms_z[j];
+        A.row(5).col(k+ 0*dxnonull_total) = -atoms_y[j];
+        
+        A.row(0).col(k+ 1*dxnonull_total) = 0.0;
+        A.row(1).col(k+ 1*dxnonull_total) = 1.0;
+        A.row(2).col(k+ 1*dxnonull_total) = 0.0;
+        A.row(3).col(k+ 1*dxnonull_total) = -atoms_z[j];
+        A.row(4).col(k+ 1*dxnonull_total) = 0.0;
+        A.row(5).col(k+ 1*dxnonull_total) = atoms_x[j];
+        
+        A.row(0).col(k+ 2*dxnonull_total) = 0.0;
+        A.row(1).col(k+ 2*dxnonull_total) = 0.0;
+        A.row(2).col(k+ 2*dxnonull_total) = 1.0;
+        A.row(3).col(k+ 2*dxnonull_total) = atoms_y[j];
+        A.row(4).col(k+ 2*dxnonull_total) = -atoms_x[j];
+        A.row(5).col(k+ 2*dxnonull_total) = 0.0;
+  
+        k++;
       }
 
-      // auto point2=high_resolution_clock::now();
-      // step3 jedi.cpp
-      //Aplus = arma::trans(A)*arma::pinv(A*arma::trans(A),0.0);
-      Aplus=arma::pinv(A);
+      //cout << "Step 3: Build matrix L" << endl;
+      L[0] = -sum_dx;
+      L[1] = -sum_dy;
+      L[2] = -sum_dz;
+      L[3] = -sum_tx;
+      L[4] = -sum_ty;
+      L[5] = -sum_tz;
 
-      // auto point3=high_resolution_clock::now();
-      // step4 jedi.cpp
-      P = Aplus * L;
+      //cout << "Step 4: calculate constants" << endl;
+      arma::mat At = trans(A);
+      arma::vec c = At*pinv(A*At)*L;
+      //c.print();
 
-      // auto point4=high_resolution_clock::now();
-
-      // step5 jedi.cpp
+      //cout << "Step 5 Apply constants" << endl;
+      k=0;
       for (unsigned j = 0; j < n_atoms; j++)
       {
+        if (!dxnonull[j])
+           continue;
         if (dumpderivatives and step%probestride==0)
         {
          ofstream wfile;
          wfile.open("derivatives.csv",std::ios_base::app);
          wfile << setprecision(16); //need to save all significant figures for python postprocessing!
-         wfile << step << " " << d_Psi_dx[j] << " " << P[j + 0 * n_atoms] << " " << d_Psi_dx[j]+P[j + 0 * n_atoms] << 
-                          " " << d_Psi_dy[j] << " " << P[j + 1 * n_atoms] << " " << d_Psi_dy[j]+P[j + 1 * n_atoms] << 
-                          " " << d_Psi_dz[j] << " " << P[j + 2 * n_atoms] << " " << d_Psi_dz[j]+P[j + 2 * n_atoms] << endl;
+         wfile << step << " " << j << " " << d_Psi_dx[j] << " " << c[k + 0 * dxnonull_total] << " " << d_Psi_dx[j]+c[k + 0 * dxnonull_total] << 
+                                      " " << d_Psi_dy[j] << " " << c[k + 1 * dxnonull_total] << " " << d_Psi_dy[j]+c[k + 1 * dxnonull_total] << 
+                                      " " << d_Psi_dz[j] << " " << c[k + 2 * dxnonull_total] << " " << d_Psi_dz[j]+c[k + 2 * dxnonull_total] << endl;
          wfile.close(); 
         }
-        d_Psi_dx[j] += P[j + 0 * n_atoms];
-        d_Psi_dy[j] += P[j + 1 * n_atoms];
-        d_Psi_dz[j] += P[j + 2 * n_atoms];
-      }
-      // auto point5=high_resolution_clock::now();
-
-      // Only for debugging
+        d_Psi_dx[j] += c[k + 0 * dxnonull_total];
+        d_Psi_dy[j] += c[k + 1 * dxnonull_total];
+        d_Psi_dz[j] += c[k + 2 * dxnonull_total];
+        k++;
+      } 
       
-      sum_d_dx=0;
-      sum_d_dy=0;
-      sum_d_dz=0;
-      sum_t_dx=0;
-      sum_t_dy=0;
-      sum_t_dz=0;
+      //cout << "Step 6: Sanity check" << endl;
+      sum_dx=0;
+      sum_dy=0;
+      sum_dz=0;
+      sum_tx=0;
+      sum_ty=0;
+      sum_tz=0;
 
       for (unsigned j=0;j<n_atoms;j++)
       {
-       sum_d_dx+=d_Psi_dx[j];
-       sum_d_dy+=d_Psi_dy[j];
-       sum_d_dz+=d_Psi_dz[j];
-       sum_t_dx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
-       sum_t_dy+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
-       sum_t_dz+=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
+       sum_dx+=d_Psi_dx[j];
+       sum_dy+=d_Psi_dy[j];
+       sum_dz+=d_Psi_dz[j];
+       sum_tx+=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
+       sum_ty+=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
+       sum_tz+=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
       }
 
-      if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
-          (sum_t_dx>err_tol) or (sum_t_dy>err_tol) or (sum_t_dz>err_tol))
+      if ((sum_dx>err_tol) or (sum_dy>err_tol) or (sum_dz>err_tol) or 
+          (sum_tx>err_tol) or (sum_ty>err_tol) or (sum_tz>err_tol))
       {
       cout << "Error: Correction of derivatives malfunctioned. Simulation will now end." << endl;
-      cout << "Sum derivatives: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << endl;
-      cout << "Sum torques: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
+      cout << "Sum derivatives: " << sum_dx << " " << sum_dy << " " << sum_dz << endl;
+      cout << "Sum torques: "     << sum_tx << " " << sum_ty << " " << sum_tz << endl;
       exit(0);
       }
       
