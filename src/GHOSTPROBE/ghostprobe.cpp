@@ -109,14 +109,8 @@ namespace PLMD
       double sum_t_dy;
       double sum_t_dz;
 
-      arma::mat A;
-      arma::mat B;
-      arma::mat Bt;
-      arma::mat c;
-      arma::vec u;
-      arma::vec v;
       //for when correction of derivatives fails
-      double err_tol=0.00001;
+      double err_tol=0.00000000001;
       bool dumpderivatives;
 
     public:
@@ -337,12 +331,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         tz=vector<double>(n_atoms,0);
         dxnonull=vector<bool>(n_atoms,false);
         dxnonull_size=0;
-        A = arma::mat(6,n_atoms);
-        c = arma::vec(n_atoms);
-        B = arma::mat(n_atoms-6,n_atoms);
-        Bt = arma::mat(n_atoms,n_atoms-6);; 
-        v = arma::vec(n_atoms);
-        fill(v.begin(),v.end(),1);
       }
       else
       {
@@ -385,7 +373,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         wfile.close();
       }
 
-      //cout << "Calculating torques" << endl;
+      //cout << "Step 0: calculating torques" << endl;
       for (unsigned j=0; j<n_atoms;j++)
       {
         if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
@@ -398,11 +386,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
       
       //cout << "Generating matrices" << endl;
-      A=arma::mat(6,dxnonull_size);
-      c=arma::vec(dxnonull_size);
-      v=arma::vec(dxnonull_size);
+      
+      arma::vec v(dxnonull_size);
       fill(v.begin(),v.end(),1);
 
+      arma::mat A(6,dxnonull_size);
       unsigned k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
@@ -419,9 +407,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       
       //cout << "Matrix ops" << endl;
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
-      B=arma::null(A);
-      Bt=arma::trans(B);
-      c=(B*pinv(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
+      arma::mat B=arma::null(A);
+      arma::mat Bt=arma::trans(B);
+      arma::vec c=(B*pinv(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
       //cout << "Assigning correction" << endl;
       k=0;
