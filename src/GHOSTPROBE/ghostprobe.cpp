@@ -395,7 +395,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         dxnonull[j]=true;
         dxnonull_size++;
       }
-      
+
+      //if all derivatives are equal to 0 skip this step
+      if (dxnonull_size==0)
+      {
+        return;
+      }
       //cout << "Generating matrices" << endl;
       
       v=arma::vec(dxnonull_size);
@@ -560,8 +565,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         {
          probes[i].move_probe(step, atoms_x, atoms_y, atoms_z);
         }
-        //perturb probe coordinates  at every step
-        probes[i].perturb_probe();
 
         //Calculate Psi and its derivatives
         if (!nocvcalc)
@@ -579,11 +582,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           }
         }
 
+        // print probe coordinates
         if (step%probestride==0)
         {
           probes[i].print_probe_xyz(step);
           probes[i].print_probe_movement(step, atoms, n_atoms);
         }
+
+        //perturb probe coordinates  at every step (if activity<1)
+        probes[i].perturb_probe();
       }
 
       //Correct the Psi derivatives so that they sum 0
