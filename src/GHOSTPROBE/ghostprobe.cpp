@@ -338,8 +338,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         dxnonull=vector<bool>(n_atoms,false);
         dxnonull_size=0;
         A=arma::mat(6,n_atoms);
-        B=arma::mat(6,n_atoms);
-        Bt=arma::mat(n_atoms,6);
+        B=arma::mat(n_atoms,n_atoms);
+        Bt=arma::mat(n_atoms,n_atoms);
         v=arma::vec(n_atoms);
         c=arma::vec(n_atoms);
       }
@@ -419,8 +419,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       //cout << "Matrix ops" << endl;
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
       B=arma::null(A);
-      Bt=arma::trans(B);
-      c=(B*pinv(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
+      Bt=B.t();
+      c=(B*arma::inv_sympd(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
       //cout << "Assigning correction" << endl;
       k=0;
