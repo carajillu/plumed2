@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2022 The plumed team
+   Copyright (c) 2011-2023 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -20,7 +20,7 @@
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "Bias.h"
-#include "ActionRegister.h"
+#include "core/ActionRegister.h"
 #include "core/ActionSet.h"
 #include "core/PlumedMain.h"
 #include "core/Atoms.h"
@@ -33,9 +33,6 @@
 #include "tools/File.h"
 #include <ctime>
 #include <numeric>
-#if defined(__PLUMED_HAS_GETCWD)
-#include <unistd.h>
-#endif
 
 namespace PLMD {
 namespace bias {
@@ -878,6 +875,12 @@ MetaD::MetaD(const ActionOptions& ao):
   // MPI version
   parseFlag("WALKERS_MPI",walkers_mpi_);
 
+  //If this Action is not compiled with MPI the user is informed and we exit gracefully
+  if(walkers_mpi_) {
+    plumed_assert(Communicator::plumedHasMPI()) << "Invalid walkers configuration: WALKERS_MPI flag requires MPI compilation";
+    plumed_assert(Communicator::initialized()) << "Invalid walkers configuration: WALKERS_MPI needs the communicator correctly initialized.";
+  }
+
   // Flying Gaussian
   parseFlag("FLYING_GAUSSIAN", flying_);
 
@@ -1172,7 +1175,7 @@ MetaD::MetaD(const ActionOptions& ao):
           if(mesh>0.5*sigma0_[i]) log<<"  WARNING: Using a METAD with a Grid Spacing larger than half of the Gaussians width (SIGMA) can produce artifacts\n";
         } else {
           if(sigma0min_[i]<0.) error("When using ADAPTIVE Gaussians on a grid SIGMA_MIN must be specified");
-          if(mesh>0.5*sigma0min_[i]) log<<"  WARNING: to use a METAD with a GRID and ADAPTIVE you need to set a Grid Spacing larger than half of the Gaussians (SIGMA_MIN) \n";
+          if(mesh>0.5*sigma0min_[i]) log<<"  WARNING: to use a METAD with a GRID and ADAPTIVE you need to set a Grid Spacing lower than half of the Gaussians (SIGMA_MIN) \n";
         }
       }
       std::string funcl=getLabel() + ".bias";
@@ -1188,18 +1191,14 @@ MetaD::MetaD(const ActionOptions& ao):
       }
     } else {
       // read the grid in input, find the keys
-#ifdef __PLUMED_HAS_GETCWD
       if(walkers_mpi_&&gridreadfilename_.at(0)!='/') {
         //if possible the root replica will share its current folder so that all walkers will read the same file
-        char cwd[4096]= {0};
-        const char* ret=getcwd(cwd,4096);
-        plumed_assert(ret)<<"Name of current directory too long, increase buffer size";
+        const std::string ret = std::filesystem::current_path();
         gridreadfilename_ = "/" + gridreadfilename_;
         gridreadfilename_ = ret + gridreadfilename_;
         if(comm.Get_rank()==0) multi_sim_comm.Bcast(gridreadfilename_,0);
         comm.Bcast(gridreadfilename_,0);
       }
-#endif
       IFile gridfile;
       gridfile.link(*this);
       if(gridfile.FileExist(gridreadfilename_)) {
@@ -1232,18 +1231,14 @@ MetaD::MetaD(const ActionOptions& ao):
     if(result!=0&&result!=mpi_nw_) error("in this WALKERS_MPI run some replica have restarted from GRID while other do not!");
   }
 
-#ifdef __PLUMED_HAS_GETCWD
   if(walkers_mpi_&&mw_dir_==""&&hillsfname.at(0)!='/') {
     //if possible the root replica will share its current folder so that all walkers will read the same file
-    char cwd[4096]= {0};
-    const char* ret=getcwd(cwd,4096);
-    plumed_assert(ret)<<"Name of current directory too long, increase buffer size";
+    const std::string ret = std::filesystem::current_path();
     mw_dir_ = ret;
     mw_dir_ = mw_dir_ + "/";
     if(comm.Get_rank()==0) multi_sim_comm.Bcast(mw_dir_,0);
     comm.Bcast(mw_dir_,0);
   }
-#endif
 
   // creating std::vector of ifile* for hills reading
   // open all files at the beginning and read Gaussians if restarting

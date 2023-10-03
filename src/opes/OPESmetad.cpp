@@ -297,8 +297,6 @@ PRINT STRIDE=100 FILE=COLVAR ARG=cv,opes.*
 
 struct exploration { static const bool explore=true; };
 typedef OPESmetad<exploration> OPESmetad_e;
-// For some reason, this is not seen correctly by cppcheck
-// cppcheck-suppress unknownMacro
 PLUMED_REGISTER_ACTION(OPESmetad_e,"OPES_METAD_EXPLORE")
 
 template <class mode>
@@ -308,7 +306,11 @@ void OPESmetad<mode>::registerKeywords(Keywords& keys)
   keys.use("ARG");
   keys.add("compulsory","TEMP","-1","temperature. If not set, it is taken from MD engine, but not all MD codes provide it");
   keys.add("compulsory","PACE","the frequency for kernel deposition");
-  keys.add("compulsory","SIGMA","ADAPTIVE","the initial widths of the kernels. If not set, adaptive sigma will be used with the given ADAPTIVE_SIGMA_STRIDE");
+  std::string info_sigma("the initial widths of the kernels");
+  if(mode::explore)
+    info_sigma+=", divided by the square root of gamma";
+  info_sigma+=". If not set, an adaptive sigma will be used with the given ADAPTIVE_SIGMA_STRIDE";
+  keys.add("compulsory","SIGMA","ADAPTIVE",info_sigma);
   keys.add("compulsory","BARRIER","the free energy barrier to be overcome. It is used to set BIASFACTOR, EPSILON, and KERNEL_CUTOFF to reasonable values");
   keys.add("compulsory","COMPRESSION_THRESHOLD","1","merge kernels if closer than this threshold, in units of sigma");
 //extra options
@@ -556,6 +558,10 @@ OPESmetad<mode>::OPESmetad(const ActionOptions& ao)
   parseFlag("WALKERS_MPI",walkers_mpi);
   if(walkers_mpi)
   {
+    //If this Action is not compiled with MPI the user is informed and we exit gracefully
+    plumed_massert(Communicator::plumedHasMPI(),"Invalid walkers configuration: WALKERS_MPI flag requires MPI compilation");
+    plumed_massert(Communicator::initialized(),"Invalid walkers configuration: WALKERS_MPI needs the communicator correctly initialized.");
+
     if(comm.Get_rank()==0)//multi_sim_comm works on first rank only
     {
       NumWalkers_=multi_sim_comm.Get_size();
@@ -938,7 +944,7 @@ OPESmetad<mode>::OPESmetad(const ActionOptions& ao)
   log.printf("  Bibliography: ");
   log<<plumed.cite("M. Invernizzi and M. Parrinello, J. Phys. Chem. Lett. 11, 2731-2736 (2020)");
   if(mode::explore || adaptive_sigma_)
-    log<<plumed.cite("M. Invernizzi and M. Parrinello, preprint arXiv:2201.09950 (2022)");
+    log<<plumed.cite("M. Invernizzi and M. Parrinello, J. Chem. Theory Comput. 18, 3988-3996 (2022)");
   log.printf("\n");
 }
 

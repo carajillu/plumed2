@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2022 The plumed team
+   Copyright (c) 2011-2023 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -110,6 +110,8 @@ private:
 
   plumed_error_handler error_handler= {NULL,NULL};
 
+  bool nestedExceptions=false;
+
 /// Forward declaration.
   ForwardDecl<DLLoader> dlloader_fwd;
   DLLoader& dlloader=*dlloader_fwd;
@@ -193,7 +195,6 @@ private:
 /// Flag for checkpointig
   bool doCheckPoint;
 
-
 private:
 /// Forward declaration.
   ForwardDecl<TypesafePtr> stopFlag_fwd;
@@ -212,6 +213,9 @@ public:
 
 /// Flag to switch on detailed timers
   bool detailedTimers;
+
+/// GpuDevice Identifier
+  int gpuDeviceId;
 
 /// Generic map string -> double
 /// intended to pass information across Actions
@@ -417,6 +421,8 @@ public:
   void setEndPlumed();
 /// Get the value of the end plumed flag
   bool getEndPlumed() const ;
+/// Get the value of the gpuDeviceId
+  int getGpuDeviceId() const ;
 /// Call error handler.
 /// Should only be called from \ref plumed_plumedmain_cmd().
 /// If the error handler was not set, returns false.
@@ -430,6 +436,10 @@ public:
   unsigned decreaseReferenceCounter() noexcept;
 /// Report the reference counter
   unsigned useCountReferenceCounter() const noexcept;
+  void enableNestedExceptions();
+  bool getNestedExceptions()const {
+    return nestedExceptions;
+  }
 };
 
 /////
@@ -503,6 +513,11 @@ void PlumedMain::setEndPlumed() {
 inline
 bool PlumedMain::getEndPlumed() const {
   return endPlumed;
+}
+
+inline
+int PlumedMain::getGpuDeviceId() const {
+  return gpuDeviceId;
 }
 
 inline

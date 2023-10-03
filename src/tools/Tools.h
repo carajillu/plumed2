@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2022 The plumed team
+   Copyright (c) 2011-2023 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -37,6 +37,8 @@
 #include <cstddef>
 #include <queue>
 #include <mutex>
+#include <filesystem>
+#include <utility>
 
 namespace PLMD {
 
@@ -120,6 +122,8 @@ public:
 /// Convert anything into anything, throwing an exception in case there is an error
 /// Remove trailing blanks
   static void trim(std::string & s);
+/// Remove leading blanks
+  static void ltrim(std::string & s);
 /// Remove trailing comments
   static void trimComments(std::string & s);
 /// Apply pbc for a unitary cell
@@ -208,36 +212,16 @@ public:
 /// In case system calls to change dir are not available it throws an exception.
 /// \warning By construction, changing directory breaks thread safety! Use with care.
   class DirectoryChanger {
-    static const std::size_t buffersize=4096;
-    char cwd[buffersize]= {0};
+    const std::filesystem::path path;
   public:
     explicit DirectoryChanger(const char*path);
     ~DirectoryChanger();
   };
-/// Mimic C++14 std::make_unique
-  template<class T> struct _Unique_if {
-    typedef std::unique_ptr<T> _Single_object;
-  };
-  template<class T> struct _Unique_if<T[]> {
-    typedef std::unique_ptr<T[]> _Unknown_bound;
-  };
-  template<class T, std::size_t N> struct _Unique_if<T[N]> {
-    typedef void _Known_bound;
-  };
+
   template<class T, class... Args>
-  static typename _Unique_if<T>::_Single_object
-  make_unique(Args&&... args) {
-    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+  static auto make_unique(Args&&... args) {
+    return std::make_unique<T>(std::forward<Args>(args)...);
   }
-  template<class T>
-  static typename _Unique_if<T>::_Unknown_bound
-  make_unique(std::size_t n) {
-    typedef typename std::remove_extent<T>::type U;
-    return std::unique_ptr<T>(new U[n]());
-  }
-  template<class T, class... Args>
-  static typename _Unique_if<T>::_Known_bound
-  make_unique(Args&&...) = delete;
 
   static void set_to_zero(double*ptr,unsigned n) {
     for(unsigned i=0; i<n; i++) ptr[i]=0.0;
@@ -273,7 +257,7 @@ public:
     {
       typename C::const_iterator fwdIt,endIt;
 
-      Entry(C const& v) : fwdIt(v.begin()), endIt(v.end()) {}
+      explicit Entry(C const& v) : fwdIt(v.begin()), endIt(v.end()) {}
       /// check if this vector still contains something to be pushed
       explicit operator bool () const { return fwdIt != endIt; }
       /// to allow using a priority_queu, which selects the highest element.
@@ -346,6 +330,9 @@ public:
 
   }
   static std::unique_ptr<std::lock_guard<std::mutex>> molfile_lock();
+  /// Build a concatenated exception message.
+  /// Should be called with an in-flight exception.
+  static std::string concatenateExceptionMessages();
 };
 
 template <class T>
