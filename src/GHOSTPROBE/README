@@ -1,0 +1,27 @@
+DIRECTORY CONTAINING THE GHOSTPROBE COLLECTIVE VARIABLE
+GhostProbe is a CV that induces the opening of cryptic pockets
+
+DEPENDENCIES
+Armadillo (currently 12.6.4)
+An MPI-capable compiler if you want to use MPI
+
+(For other dependencies, see main plumed installation instructions)
+
+INSTALLATION INSTRUCTIONS (run from plumed2_carajillu/ directory)
+1) If you need to install compilers/dependencies, it is recommended you do it on a new conda
+environment (www.anaconda.org)
+
+conda create --name plumed
+conda activate plumed
+conda install -c conda-forge make openmpi armadillo c-compiler cxx-compiler fortran-compiler
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/plumed/environment/lib
+
+2) If you already have all the relevant compilers and libraries:
+
+./configure --prefix="path/to/where/plumed/will/be/installed" LIBS="-larmadillo" CXX=$YOUR_MPI_COMPILER #if you want MPI
+make install
+
+3) Add the following directory to your LD_LIBRARY_PATH:path/to/where/plumed/will/be/installed/lib
+4) Set this environment variable: PLUMED_KERNEL=path/to/where/plumed/will/be/installed/lib/libplumedKernel.so
+
+
