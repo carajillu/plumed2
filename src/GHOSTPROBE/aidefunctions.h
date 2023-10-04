@@ -1,6 +1,6 @@
 #include <vector>
 #include "colvar/Colvar.h"
-#include "colvar/ActionRegister.h"
+#include "core/ActionRegister.h"
 
 using namespace std;
 class aidefunctions
