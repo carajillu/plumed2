@@ -117,9 +117,10 @@ void Probe::perturb_probe()
   else if (activity>0 and activity<1)
   {
    double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
-   xyz[0]+=Kpert/norm*d_activity_dprobe[0];
-   xyz[1]+=Kpert/norm*d_activity_dprobe[1];
-   xyz[2]+=Kpert/norm*d_activity_dprobe[2];
+   //F=-dV/dx meaning that we have to subtract the derivatives, not add them!
+   xyz[0]-=Kpert/norm*d_activity_dprobe[0];
+   xyz[1]-=Kpert/norm*d_activity_dprobe[1];
+   xyz[2]-=Kpert/norm*d_activity_dprobe[2];
   }
   return;
 }
