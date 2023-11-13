@@ -102,26 +102,43 @@ void Probe::place_probe(double x, double y, double z)
 void Probe::perturb_probe()
 {
   if (activity==1)
+  {
+  //cout << "activity = " << activity << ". Probe staying in place." << endl;
   return;
+  }
 
   if (activity==0)
   {
-   double rand_x=COREFUNCTIONS::random_double(-1,1);
-   double rand_y=COREFUNCTIONS::random_double(-1,1);
-   double rand_z=COREFUNCTIONS::random_double(-1,1);
-   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
-   xyz[0]+=Kpert/norm*rand_x;
-   xyz[1]+=Kpert/norm*rand_y;
-   xyz[2]+=Kpert/norm*rand_z;
+   if (C==0 or total_enclosure>0) //probe is either too deep or just a bit too far, move in a random direction
+   {
+    //cout << "C = " << C << ". Moving probe at random." << endl;
+    double rand_x=COREFUNCTIONS::random_double(-1,1);
+    double rand_y=COREFUNCTIONS::random_double(-1,1);
+    double rand_z=COREFUNCTIONS::random_double(-1,1);
+    double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
+    xyz[0]+=Kpert/norm*rand_x;
+    xyz[1]+=Kpert/norm*rand_y;
+    xyz[2]+=Kpert/norm*rand_z;
+   }
+   else if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
+   { 
+    //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
+    double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
+    xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
+    xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
+    xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+   }
   }
   else if (activity>0 and activity<1)
   {
+   //cout << "activity = " << activity << ". Moving probe in the direction of the force" << endl;
    double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
    //F=-dV/dx meaning that we have to subtract the derivatives, not add them!
-   xyz[0]-=Kpert/norm*d_activity_dprobe[0];
-   xyz[1]-=Kpert/norm*d_activity_dprobe[1];
-   xyz[2]-=Kpert/norm*d_activity_dprobe[2];
+   xyz[0]+=(1-activity)*Kpert/norm*d_activity_dprobe[0];
+   xyz[1]+=(1-activity)*Kpert/norm*d_activity_dprobe[1];
+   xyz[2]+=(1-activity)*Kpert/norm*d_activity_dprobe[2];
   }
+
   return;
 }
 
