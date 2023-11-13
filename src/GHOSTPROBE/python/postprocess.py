@@ -76,7 +76,7 @@ def print_probes_pdb(probes_trj,activity,activity_min):
             if activity[atomname][i]<activity_min:
                 continue
             residue=top.add_residue("PRB",chain)
-            top.add_atom("P"+str(i).zfill(2),mdtraj.element.helium,residue)
+            top.add_atom(atomname,mdtraj.element.helium,residue)
             xyz.append(probes_trj.xyz[i][j])
             bfactors.append(activity[atomname][i])
     trj=mdtraj.Trajectory(xyz,top)
