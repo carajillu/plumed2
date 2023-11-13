@@ -8,6 +8,7 @@ def parse():
     parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format",default="traj.gro")
     parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default=None)
+    parser.add_argument('-z','--stride_xyz', nargs="?", type=int,help="Load 1 in n frames for xyz files",default=1)
     parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes",default=1)
     parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein_probes")
     parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMS style selection)",default="all")
@@ -16,13 +17,15 @@ def parse():
     args = parser.parse_args()
     return args
 
-def process_xyz(input_xyz):
+def process_xyz(input_xyz,stride_xyz):
     atomlist=[]
     atom_crd=[]
     snap_crd=[]
     filein=open(input_xyz)
+    stride=-1
     for line in filein:
         if line.startswith("Step") or line.startswith("Probe"):
+            stride=stride+1
             continue
         line=line.split()
         if len(line)==1:
@@ -33,6 +36,8 @@ def process_xyz(input_xyz):
                atomlist.append(int(line[0])-1) # we are getting just list indices
             except:
                pass # for when we process probes
+        if(stride%stride_xyz!=0):
+            continue
         crd_j=[float(line[1])/10,float(line[2])/10,float(line[3])/10]
         snap_crd.append(crd_j)
         if len(snap_crd)==n_atoms:
@@ -57,12 +62,12 @@ def stack_traj(protein_traj,probes_trj):
         protein_traj=protein_traj.stack(probe)
     return protein_traj
 
-def get_activity(nprobes):
+def get_activity(nprobes,stride_xyz):
     activity=pd.DataFrame()
     for i in range(0,nprobes):
         name="P"+str(i).zfill(2)
         filename="probe-"+str(i)+"-stats.csv"
-        activity[name]=pd.read_csv(filename,sep=" ").activity
+        activity[name]=pd.read_csv(filename,sep=" ",skiprows=lambda i: i % stride_xyz).activity
     return activity
 
 def print_probes_pdb(probes_trj,activity,activity_min):
@@ -92,7 +97,7 @@ if __name__=="__main__":
     print("processing file "+args.input_gro)
     traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)
     if (args.input_xyz is not None):
-       atomlist, xyz_prot=process_xyz(args.input_xyz)
+       atomlist, xyz_prot=process_xyz(args.input_xyz,args.stride_xyz)
        subset=traj_obj.atom_slice(atomlist)
        subset.xyz=xyz_prot
     else:
@@ -107,7 +112,7 @@ if __name__=="__main__":
         for i in range(args.nprobes):
             probefile="probe-"+str(i)+".xyz"
             print("reading file "+probefile)
-            probeatomlist, xyz_probe=process_xyz(probefile)
+            probeatomlist, xyz_probe=process_xyz(probefile,args.stride_xyz)
             trj=mktraj(xyz_probe,i)
             probes_trj.append(trj)
     
@@ -128,5 +133,5 @@ if __name__=="__main__":
         print("protein traj could not be saved")
     
     probes_trj=newtraj.atom_slice(newtraj.topology.select("resname PRB"))
-    activity=get_activity(args.nprobes)
+    activity=get_activity(args.nprobes,args.stride_xyz)
     probes_trj=print_probes_pdb(probes_trj,activity,args.actmin)
