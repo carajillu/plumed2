@@ -290,9 +290,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parse("KPERT",kpert);
       if (!kpert)
       {
-        kpert=0.001;
+        cout << "****************************************************************************" << endl;
+        cout << "KPERT HAS either not been set, or manually set to zero." << endl;
+        cout << "WARNING: PROBE WILL NOT BE PERTURBED AND POCKET SEARCH WILL NOT BE PERFORMED" << endl;
+        cout << "****************************************************************************" << endl;
       }
+      else
+      {
       cout << "Perturbations of " << kpert << " nm will be applied to all probes." << endl;
+      }
       
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -590,7 +596,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
 
         //perturb probe coordinates  at every step (if activity<1)
+        if (kpert>0)
+        {
         probes[i].perturb_probe();
+        }
       }
 
       //Correct the Psi derivatives so that they sum 0
