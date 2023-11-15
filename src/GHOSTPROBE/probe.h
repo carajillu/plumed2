@@ -20,6 +20,7 @@ class Probe
   double Pmin; // packing factor below which depth term equals 0
   double deltaP; // interval over which depth term turns from 0 to 1
   double Kpert;
+  unsigned pertstride; // We apply a full random perturbation every pertstride steps
   
   //stuff
   unsigned n_atoms;
@@ -90,10 +91,11 @@ class Probe
           double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
-          unsigned N_atoms, double kpert);
+          double kpert, unsigned Pertstride,
+          unsigned N_atoms);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe();
+    void perturb_probe(unsigned step);
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);

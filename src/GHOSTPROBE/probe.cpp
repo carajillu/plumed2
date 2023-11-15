@@ -18,12 +18,13 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, 
+Probe::Probe(unsigned Probe_id,
             double RMin, double DeltaRmin, 
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
             double psimin, double deltapsi, 
-            unsigned N_atoms, double kpert)
+            double kpert, unsigned Pertstride,
+            unsigned N_atoms)
 {
   probe_id=Probe_id;
   dxcalc=true;
@@ -37,6 +38,7 @@ Probe::Probe(unsigned Probe_id,
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
+  pertstride=Pertstride;
 
   //allocate vectors
   rx=vector<double>(n_atoms,0);
@@ -99,36 +101,39 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-void Probe::perturb_probe()
+void Probe::perturb_probe(unsigned step)
 {
-  if (activity==1)
+  if (activity==1 and step%pertstride!=0)
   {
   //cout << "activity = " << activity << ". Probe staying in place." << endl;
   return;
   }
 
-  if (activity==0)
+  //Random kpert perturbation
+  if ((C==0) or //region is completely occluded
+  (P==0 and total_enclosure>0) or // probe is just a bit too far from the protein 
+  (step%pertstride==0)) //it's time to apply a full random perturbation regardless of anything else
   {
-   if (C==0 or total_enclosure>0) //probe is either too deep or just a bit too far, move in a random direction
-   {
-    //cout << "C = " << C << ". Moving probe at random." << endl;
-    double rand_x=COREFUNCTIONS::random_double(-1,1);
-    double rand_y=COREFUNCTIONS::random_double(-1,1);
-    double rand_z=COREFUNCTIONS::random_double(-1,1);
-    double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
-    xyz[0]+=Kpert/norm*rand_x;
-    xyz[1]+=Kpert/norm*rand_y;
-    xyz[2]+=Kpert/norm*rand_z;
-   }
-   else if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
-   { 
-    //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
-    double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
-    xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
-    xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
-    xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
-   }
+   //cout << "Step " << step << " random pert" << endl;
+   //cout << "C = " << C << ". Moving probe at random." << endl;
+   double rand_x=COREFUNCTIONS::random_double(-1,1);
+   double rand_y=COREFUNCTIONS::random_double(-1,1);
+   double rand_z=COREFUNCTIONS::random_double(-1,1);
+   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
+   xyz[0]+=Kpert/norm*rand_x;
+   xyz[1]+=Kpert/norm*rand_y;
+   xyz[2]+=Kpert/norm*rand_z;
   }
+  //kpert perturbation towards the centre of the protein
+  else if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
+  { 
+   //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
+   double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
+   xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
+   xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
+   xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+  }
+  //(1-activity)*kpert perturbation in the direction of the derivatives
   else if (activity>0 and activity<1)
   {
    //cout << "activity = " << activity << ". Moving probe in the direction of the force" << endl;
@@ -138,7 +143,6 @@ void Probe::perturb_probe()
    xyz[1]+=(1-activity)*Kpert/norm*d_activity_dprobe[1];
    xyz[2]+=(1-activity)*Kpert/norm*d_activity_dprobe[2];
   }
-
   return;
 }
 

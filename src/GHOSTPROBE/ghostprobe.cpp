@@ -60,7 +60,7 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
-      unsigned pertstride;
+      unsigned pertstride=0;
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
       double deltaRmin=0;        // interval over which contact terms are turned on and off
@@ -154,7 +154,7 @@ namespace PLMD
       keys.add("optional", "PMIN", "");
       keys.add("optional", "DELTAP", "");
       keys.add("optional", "KPERT", "");
-      keys.add("optional", "PERTSTRIDE", "");
+      keys.add("optional", "PERTSTRIDE", "Do a full KPERT random perturbation every PERTSTRIDE steps");
     }
 
     Ghostprobe::Ghostprobe(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
@@ -283,10 +283,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "DELTAP = " << deltaP << endl;
 
       parse("PERTSTRIDE",pertstride);
-      if(!pertstride)
-      {
-        pertstride=1;
-      }
+
       parse("KPERT",kpert);
       if (!kpert)
       {
@@ -307,7 +304,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
                                Rmax, deltaRmax, 
                                Cmin, deltaC, 
                                Pmin, deltaP, 
-                               n_atoms, kpert));
+                               kpert, pertstride,
+                               n_atoms));
         cout << "Probe " << i << " initialised" << endl;
       }
 
@@ -516,7 +514,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           y=getPosition(init_j[i])[1];
           z=getPosition(init_j[i])[2];
           probes[i].place_probe(x,y,z);
-          probes[i].perturb_probe();
+          probes[i].perturb_probe(0);
           cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
         }
       }
@@ -598,7 +596,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         //perturb probe coordinates  at every step (if activity<1)
         if (kpert>0)
         {
-        probes[i].perturb_probe();
+        probes[i].perturb_probe(step);
         }
       }
 
