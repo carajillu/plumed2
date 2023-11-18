@@ -23,7 +23,7 @@
 #include "core/ActionRegister.h"
 
 //CV modules
-#include "com.h"
+#include "corefunctions.h"
 
 using namespace std;
 
@@ -56,14 +56,14 @@ class Waterboard : public Colvar {
 
   vector<AtomNumber> atoms;
   unsigned n_atoms;
-  vector<double> atoms_x;
-  vector<double> atoms_y;
-  vector<double> atoms_z;
+  vector<vector<double>> atoms_xyz;
 
   vector<AtomNumber> ligand;
   unsigned n_ligand;
   vector<double> masses_ligand;
-  vector<Com> ligand_com;
+  double ligand_total_mass;
+  vector<double> com_ligand;
+  vector<double> d_com_dxyz;
 
   vector<AtomNumber> water;
   unsigned n_water;
@@ -118,18 +118,11 @@ Waterboard::Waterboard(const ActionOptions&ao):
   checkRead();
 
   cout << "Initialising atom coordinate vectors ..." << endl;
-  atoms_x=vector<double>(n_atoms,0);
-  atoms_y=vector<double>(n_atoms,0);
-  atoms_z=vector<double>(n_atoms,0);
-  cout << "     ... coordinate vectors initialised." << endl;
-
-  cout << "Initialising ligand COM ..." << endl;
-  for (unsigned j=0; j<n_ligand; j++)
+  for (unsigned j=0; j<n_atoms; j++)
   {
-    masses_ligand.push_back(1); //until I figure out how to add the masses
+    atoms_xyz.push_back(vector<double>(3));
   }
-  ligand_com.push_back(Com(n_ligand,masses_ligand));
-  cout << "     ... Ligand COM initialised." << endl;
+  cout << "     ... coordinate vectors initialised." << endl;
 
   cout << "Initialising up WATERBOARD derivatives" << endl;
   d_wtb_dx=vector<double>(n_atoms,0);
@@ -143,16 +136,33 @@ Waterboard::Waterboard(const ActionOptions&ao):
 
 // calculator
 void Waterboard::calculate() {
+  unsigned step=getStep();
+
+  //This should be done at setup, but getMass seems not to work before calculate
+  if (step==0)
+  {
+    for (unsigned j = 0; j < n_ligand; j++)
+    {
+     masses_ligand.push_back(getMass(j));
+     d_com_dxyz.push_back(getMass(j));
+     ligand_total_mass+=getMass(j);
+    }
+    for (unsigned j=0;j<n_ligand;j++)
+    {
+     d_com_dxyz[j]/=ligand_total_mass;
+    }
+  }
+
   //#pragma omp parallel for
   for (unsigned j = 0; j < n_atoms; j++)
    {
-    atoms_x[j] = getPosition(j)[0];
-    atoms_y[j] = getPosition(j)[1];
-    atoms_z[j] = getPosition(j)[2];
-    //cout << j << " " << atoms_x[j] << " " << atoms_y[j] << " "  << atoms_z[j] << endl;
+    atoms_xyz[j][0] = getPosition(j)[0];
+    atoms_xyz[j][1] = getPosition(j)[1];
+    atoms_xyz[j][2] = getPosition(j)[2];
    }
-  ligand_com[0].calculate_com(atoms_x,atoms_y,atoms_z);
   //cout << "Ligand_com: " << ligand_com[0].xyz[0] << "," << ligand_com[0].xyz[1] << "," << ligand_com[0].xyz[2] << "," << endl;
+
+
 
   setValue(wtb);
 
