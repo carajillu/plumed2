@@ -85,6 +85,9 @@ class Probe
   arma::mat R; //rotation matrix
   void kabsch();
 
+  //for probe perturbation
+  void rand_pert();
+
  public:
     Probe(unsigned Probe_id, 
           double RMin, double DeltaRmin, 
