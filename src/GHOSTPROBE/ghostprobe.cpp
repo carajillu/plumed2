@@ -61,6 +61,8 @@ namespace PLMD
       bool noupdate;
       double kpert=0;
       unsigned pertstride=0;
+      bool restart_probes;
+      int restart_frame=0;
       // Parameters
       double Rmin=0;          // mind below which an atom is considered to be clashing with the probe
       double deltaRmin=0;        // interval over which contact terms are turned on and off
@@ -141,6 +143,7 @@ namespace PLMD
       keys.addFlag("NODXFIX", false, "skip derivative correction");
       keys.addFlag("PERFORMANCE", false, "measure execution time");
       keys.addFlag("DUMPDERIVATIVES", false, "print derivatives and corrections");
+      keys.addFlag("RESTART_PROBES", false, "Restart probe positions from stored coordinates");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
       keys.add("optional", "NPROBES", "Number of probes to use");
@@ -155,6 +158,7 @@ namespace PLMD
       keys.add("optional", "DELTAP", "");
       keys.add("optional", "KPERT", "");
       keys.add("optional", "PERTSTRIDE", "Do a full KPERT random perturbation every PERTSTRIDE steps");
+      keys.add("optional", "RESTART_FRAME", "");
     }
 
     Ghostprobe::Ghostprobe(const ActionOptions &ao) : PLUMED_COLVAR_INIT(ao),
@@ -163,7 +167,8 @@ namespace PLMD
                                                 noupdate(false),
                                                 nodxfix(false),
                                                 performance(false),
-                                                dumpderivatives(false)
+                                                dumpderivatives(false),
+                                                restart_probes(false)
     {
 /*
 Initialising openMP threads.
@@ -189,6 +194,14 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
       parseFlag("DUMPDERIVATIVES",dumpderivatives);
+
+      parseFlag("RESTART_PROBES",restart_probes);
+      if (restart_probes)
+      {
+       parse("RESTART_FRAME", restart_frame);
+       if (!restart_frame)
+         restart_frame=0;  
+      }
 
       parseAtomList("ATOMS", atoms);
       n_atoms = atoms.size();
@@ -299,7 +312,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       
       for (unsigned i = 0; i < nprobes; i++)
       {
-        probes.push_back(Probe(i,
+        probes.push_back(Probe(i, restart_probes,
                                Rmin, deltaRmin, 
                                Rmax, deltaRmax, 
                                Cmin, deltaC, 
@@ -505,6 +518,24 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       double x=0;
       double y=0;
       double z=0;
+
+      if (restart_probes)
+      {
+       vector<vector<double>> protein_xyz=aidefunctions::read_xyz("protein.xyz",restart_frame);
+       for (unsigned i=0; i<nprobes; i++)
+       {
+        string filename = "probe-";
+        filename.append(to_string(i));
+        filename.append(".xyz");
+        vector<vector<double>> probe_xyz=aidefunctions::read_xyz(filename,restart_frame);
+        x=probe_xyz[0][0];
+        y=probe_xyz[0][1];
+        z=probe_xyz[0][2];
+        probes[i].place_probe(x,y,z);
+        probes[i].get_atoms_restart(protein_xyz);
+       }
+       return;
+      }
 
       if (atoms_init.size() == 0)
       {

@@ -25,6 +25,7 @@ class Probe
   //stuff
   unsigned n_atoms;
   unsigned probe_id;
+  bool restart_probes;
   bool dxcalc; // avoid derivative calculation when perturbing probe
 
   vector<double> rx;
@@ -89,7 +90,7 @@ class Probe
   void rand_pert();
 
  public:
-    Probe(unsigned Probe_id, 
+    Probe(unsigned Probe_id, bool restart_probes,
           double RMin, double DeltaRmin, 
           double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
@@ -98,6 +99,7 @@ class Probe
           unsigned N_atoms);
     
     void place_probe(double x, double y, double z);
+    void get_atoms_restart(vector<vector<double>> restart_xyz);
     void perturb_probe(unsigned step);
 
     

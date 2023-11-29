@@ -18,7 +18,7 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id,
+Probe::Probe(unsigned Probe_id, bool Restart_probes,
             double RMin, double DeltaRmin, 
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
@@ -27,6 +27,7 @@ Probe::Probe(unsigned Probe_id,
             unsigned N_atoms)
 {
   probe_id=Probe_id;
+  restart_probes=Restart_probes;
   dxcalc=true;
   n_atoms=N_atoms;
   Rmin=RMin; // mind below which an atom is considered to be clashing with the probe 
@@ -333,7 +334,7 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
  //remove centroid from atom coordinates
  for (unsigned j=0; j<n_atoms;j++)
   {
-   if (step==0)
+   if (step==0 and !restart_probes)
    {
    atomcoords_0.row(j).col(0)=atoms_x[j]-centroid[0];
    atomcoords_0.row(j).col(1)=atoms_y[j]-centroid[1];
@@ -375,6 +376,26 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
+void Probe::get_atoms_restart(vector<vector<double>> restart_xyz)
+{
+ centroid0[0]=0;
+ centroid0[1]=0;
+ centroid0[2]=0;
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  centroid0[0]+=restart_xyz[j][0]/n_atoms;
+  centroid0[1]+=restart_xyz[j][1]/n_atoms;
+  centroid0[2]+=restart_xyz[j][2]/n_atoms;
+ }
+
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  atomcoords_0.row(j).col(0)=restart_xyz[j][0]-centroid0[0];
+  atomcoords_0.row(j).col(1)=restart_xyz[j][1]-centroid0[1];
+  atomcoords_0.row(j).col(2)=restart_xyz[j][2]-centroid0[2];
+ }
+ return;
+}
 void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
 {
   string filename = "probe-";
