@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
 
 # Define the modified sQM function
 def modified_sQM(m, start, end, max_val):
@@ -22,6 +23,7 @@ plt.rc("axes", labelsize=12) #fontsize of the x and y labels
 plt.rc("xtick", labelsize=10) #fontsize of the x tick labels
 plt.rc("ytick", labelsize=10) #fontsize of the y tick labels
 plt.rc("legend", fontsize=10) #fontsize of the legend
+nbins=100
 
 # Load the data from the first CSV file
 delta=0.34
@@ -35,7 +37,7 @@ max_min_r=max(data_0.min_r)
 print("maximum min_r = "+str(max_min_r))
 
 # Calculate the histogram data_0
-n, bins = np.histogram(data_0["min_r"], bins=30)
+n, bins = np.histogram(data_0["min_r"], bins=nbins)
 
 # Find the bin center with the maximum number of elements and the first non-zero bin
 max_bin_index = np.argmax(n)
@@ -54,7 +56,7 @@ modified_sQM_values = modified_sQM_vec(m_values, first_non_zero_bin, center_of_m
 fig, ax1 = plt.subplots(figsize=(6.4, 4.8))  # Default size for a single plot in a word document
 
 # Plotting the histogram
-ax1.hist(data_0["min_r"], bins=30, color="lightblue", edgecolor="white")
+ax1.hist(data_0["min_r"], bins=nbins, color="lightblue", edgecolor="white")
 
 # Set the titles and labels
 ax1.set_xlabel("Minimum probe-protein distance (nm)", fontweight="bold")
@@ -66,7 +68,7 @@ ax1.axvline(x=center_of_max_bin, color="red", linestyle="dotted", linewidth=2)
 # Add text annotation
 text_x_position = center_of_max_bin*1.03  # Adjust this as needed for better visibility
 text_y_position = ax1.get_ylim()[1]*0.9  # This will place the text at the top of the y-axis
-ax1.text(text_x_position, text_y_position, str(round(center_of_max_bin,2)), verticalalignment='top', horizontalalignment='right', color='red')
+ax1.text(text_x_position, text_y_position, "{:.2f}".format(center_of_max_bin), verticalalignment='top', horizontalalignment='right', color='red')
 
 
 # Create a second y-axis for the scaled number of elements
@@ -91,7 +93,7 @@ ax2.grid(False)
 
 # Save the plot to a PNG file with appropriate DPI for a Word document
 plt.savefig("min_r.png", dpi=300)
-
+#sys.exit()
 # Show the plot
 #plt.show()
 
@@ -118,7 +120,6 @@ for i in range(0,6):
     filename="plumed_"+("{:.2f}".format(delta))+"/probe-0-stats.csv"
     print(filename)
     data=pd.read_csv(filename, sep=" ")
-    delta=delta+0.01
     label="$\Delta C = "+"{:.2f}".format(delta)+"$"
     ax1.scatter(data.min_r, data.C, color=colors[i], marker=markers[i], label=label)
     data=data[data.C==1]
@@ -128,6 +129,7 @@ for i in range(0,6):
     if (abs((min_r)-center_of_max_bin) < diff_min_r):
         diff_min_r=abs((min_r)-center_of_max_bin)
         actplotname=filename
+    delta=delta+0.01
 
 print("activity will be ploted for file: "+actplotname)
 ax1.grid(False)
@@ -140,7 +142,7 @@ data=pd.read_csv(actplotname,sep=" ")
 Pmin=min(data.enclosure)
 
 # Calculate the histogram data.enclosure
-n, bins = np.histogram(data_0.enclosure, bins=30)
+n, bins = np.histogram(data_0.enclosure, bins=nbins)
 
 # Find the bin center with the maximum number of elements and the first non-zero bin
 max_bin_index = np.argmax(n)
@@ -150,7 +152,7 @@ first_non_zero_bin = bins[np.nonzero(n)[0][0]]
 
 fig, ax1 = plt.subplots(figsize=(6.4, 4.8))  # Default size for a single plot in a word document
 # Plotting the histogram
-ax1.hist(data_0["enclosure"], bins=30, color="lightblue", edgecolor="white")
+ax1.hist(data_0["enclosure"], bins=nbins, color="lightblue", edgecolor="white")
 
 # Set the titles and labels
 ax1.set_xlabel("$p_{i}$", fontweight="bold")
@@ -172,7 +174,7 @@ plt.savefig("p", dpi=300)
 #Plot activity
 fig, ax1 = plt.subplots(figsize=(6.4, 4.8))  # Default size for a single plot in a word document
 # Plotting the histogram
-ax1.hist(data_0["activity"], bins=30, color="lightblue", edgecolor="white",log=True)
+ax1.hist(data_0["activity"], bins=nbins, color="lightblue", edgecolor="white",log=True)
 
 # Set the titles and labels
 ax1.set_xlabel("activity", fontweight="bold")
