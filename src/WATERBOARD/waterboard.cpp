@@ -68,6 +68,15 @@ class Waterboard : public Colvar {
   vector<AtomNumber> water;
   unsigned n_water;
 
+  vector<double> rx;
+  vector<double> ry;
+  vector<double> rz;
+  vector<double> r;
+  
+  vector<double> dr_dx;
+  vector<double> dr_dy;
+  vector<double> dr_dz;
+
   double wtb;
   vector<double> d_wtb_dx;
   vector<double> d_wtb_dy;
@@ -117,6 +126,20 @@ Waterboard::Waterboard(const ActionOptions&ao):
 
   checkRead();
 
+  // com vectors
+  com_ligand=vector<double>(3);
+  d_com_dxyz=vector<double>(n_ligand);
+  
+  // distance vetors
+  rx=vector<double>(n_water,0);
+  ry=vector<double>(n_water,0);
+  rz=vector<double>(n_water,0);
+  r=vector<double>(n_water,0);
+  
+  dr_dx=vector<double>(n_water,0);
+  dr_dy=vector<double>(n_water,0);
+  dr_dz=vector<double>(n_water,0);
+
   cout << "Initialising atom coordinate vectors ..." << endl;
   for (unsigned j=0; j<n_atoms; j++)
   {
@@ -124,7 +147,7 @@ Waterboard::Waterboard(const ActionOptions&ao):
   }
   cout << "     ... coordinate vectors initialised." << endl;
 
-  cout << "Initialising up WATERBOARD derivatives" << endl;
+  cout << "Initialising WATERBOARD derivatives" << endl;
   d_wtb_dx=vector<double>(n_atoms,0);
   d_wtb_dy=vector<double>(n_atoms,0);
   d_wtb_dz=vector<double>(n_atoms,0);
@@ -153,6 +176,8 @@ void Waterboard::calculate() {
     }
   }
 
+  
+
   //#pragma omp parallel for
   for (unsigned j = 0; j < n_atoms; j++)
    {
@@ -160,7 +185,10 @@ void Waterboard::calculate() {
     atoms_xyz[j][1] = getPosition(j)[1];
     atoms_xyz[j][2] = getPosition(j)[2];
    }
-  //cout << "Ligand_com: " << ligand_com[0].xyz[0] << "," << ligand_com[0].xyz[1] << "," << ligand_com[0].xyz[2] << "," << endl;
+   com_ligand=COREFUNCTIONS::calculate_com(atoms_xyz,n_ligand,masses_ligand,ligand_total_mass);
+   cout << "Ligand_com: " << com_ligand[0] << "," << com_ligand[1] << "," << com_ligand[2] << "," << endl;
+
+
 
 
 
