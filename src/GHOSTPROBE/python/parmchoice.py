@@ -88,8 +88,6 @@ def create_directory(string_arg, float_arg):
         print(f"Directory '{dir_name}' already exists.")
     return dir_name
 
-
-
 def run_command(directory, command):
     # Save the current working directory
     original_directory = os.getcwd()
@@ -114,7 +112,14 @@ def run_command(directory, command):
         os.chdir(original_directory)
     return output, error
 
-def min_r_hist(min_r,nbins):   
+def min_r_hist(min_r,nbins):
+    min_min_r=min(min_r)
+    min_min_r_str="{:.4f}".format(min(min_r))
+    print(f"Minimum value of min_r: {min_min_r_str}")
+    max_min_r=max(min_r)
+    max_min_r_str="{:.4f}".format(max(min_r))
+    print(f"Minimum value of min_r: {max_min_r_str}")
+
     #Create histogram of min_r
     n, bins = np.histogram(min_r, bins=nbins)
 
@@ -144,9 +149,23 @@ def min_r_hist(min_r,nbins):
     # Add the red dotted line indicating the center of the max bin
     ax1.axvline(x=center_of_max_bin, color="red", linestyle="dotted", linewidth=2)
     # Add text annotation
-    text_x_position = center_of_max_bin*1.03  # Adjust this as needed for better visibility
+    text_x_position = center_of_max_bin*1.05  # Adjust this as needed for better visibility
     text_y_position = ax1.get_ylim()[1]*0.9  # This will place the text at the top of the y-axis
     ax1.text(text_x_position, text_y_position, "{:.4f}".format(center_of_max_bin), verticalalignment='top', horizontalalignment='right', color='red')
+
+    # Add the red dotted line indicating the center of the max bin
+    ax1.axvline(x=max_min_r, color="red", linestyle="dotted", linewidth=2)
+    # Add text annotation
+    text_x_position = max_min_r*0.99  # Adjust this as needed for better visibility
+    text_y_position = ax1.get_ylim()[1]*0.1  # This will place the text at the top of the y-axis
+    ax1.text(text_x_position, text_y_position, "{:.4f}".format(max_min_r), verticalalignment='top', horizontalalignment='right', color='red')
+
+    # Add the red dotted line indicating the center of the max bin
+    ax1.axvline(x=min_min_r, color="red", linestyle="dotted", linewidth=2)
+    # Add text annotation
+    text_x_position = min_min_r*1.05  # Adjust this as needed for better visibility
+    text_y_position = ax1.get_ylim()[1]*0.1  # This will place the text at the top of the y-axis
+    ax1.text(text_x_position, text_y_position, "{:.4f}".format(min_min_r), verticalalignment='top', horizontalalignment='right', color='red')
 
     # Create a second y-axis for the scaled number of elements
     ax2 = ax1.twinx()
@@ -201,12 +220,12 @@ def plot_C(C,center_of_max_bin):
     alpha=1
     s=10
     label="$\Delta C = "+"{:.4f}".format(C.keys()[i_best])+"$"
-    ax1.scatter(C.min_r, C[C.keys()[i_best]], color=colors[i_best], s=s, label=label,alpha=alpha)
-    ax1.axvline(x=min_r_plot, color=color, linestyle="dotted", linewidth=2)
+    ax1.scatter(C.min_r, C[C.keys()[i_best]], color="red", s=s, label=label,alpha=alpha)
+    ax1.axvline(x=min_r_plot, color="red", linestyle="dotted", linewidth=2)
     text_x_position = min_r_plot*1.05  # Adjust this as needed for better visibility
     text_y_position = ax1.get_ylim()[1]*0.995  # This will place the text at the top of the y-axis
     ax1.text(text_x_position, text_y_position, "{:.4f}".format(min_r_plot), verticalalignment='top',\
-             horizontalalignment='right', color=color, fontweight="bold")
+             horizontalalignment='right', color="red")
     ax1.grid(False)
     plt.legend()
     plt.savefig("C", dpi=300)
@@ -226,7 +245,16 @@ def plot_enclosure(filein,nbins):
     max_bin_index = np.argmax(n)
     max_elements = n[max_bin_index]
     center_of_max_bin = (bins[max_bin_index] + bins[max_bin_index + 1]) / 2
+    first_non_zero_bin = bins[np.nonzero(n)[0][0]]
     deltaP=center_of_max_bin-Pmin
+
+    # Generate the range for the modified sQM function
+    m_values = np.linspace(bins[0], bins[-1], 300)
+    # Calculate the modified sQM values
+    modified_sQM_vec = np.vectorize(modified_sQM)
+    modified_sQM_values = modified_sQM_vec(m_values, first_non_zero_bin, center_of_max_bin, max_elements)
+    #modified_sQM_values = modified_sQM_vec(m_values, 0, center_of_max_bin, max_elements)
+    
 
     fig, ax1 = plt.subplots(figsize=(6.4, 4.8))  # Default size for a single plot in a word document
     # Plotting the histogram
@@ -239,11 +267,30 @@ def plot_enclosure(filein,nbins):
 
     # Add the red dotted line indicating the center of the max bin
     ax1.axvline(x=center_of_max_bin, color="red", linestyle="dotted", linewidth=2)
+    ax1.axvline(x=Pmin, color="red", linestyle="dotted", linewidth=2)
 
     # Add text annotation
     text_x_position = center_of_max_bin*1.08  # Adjust this as needed for better visibility
-    text_y_position = ax1.get_ylim()[1]*0.9  # This will place the text at the top of the y-axis
+    text_y_position = ax1.get_ylim()[1]*0.91  # This will place the text at the top of the y-axis
     ax1.text(text_x_position, text_y_position, str(round(center_of_max_bin,2)), verticalalignment='top', horizontalalignment='right', color='red')
+    
+    # Add text annotation
+    text_x_position = Pmin*1.10  # Adjust this as needed for better visibility
+    text_y_position = ax1.get_ylim()[1]*0.1  # This will place the text at the top of the y-axis
+    ax1.text(text_x_position, text_y_position, str(round(Pmin,2)), verticalalignment='top', horizontalalignment='right', color='red')
+
+    # Plot the modified sQM function on top of the histogram
+    ax1.plot(m_values, modified_sQM_values, color="orange", linewidth=2)
+
+    # Create a second y-axis for the scaled number of elements
+    ax2 = ax1.twinx()
+    ax2.set_ylim(ax1.get_ylim())
+    ax2.set_ylabel("Number of elements (scaled)", rotation=270, labelpad=15, fontweight="bold")
+
+    # Set the second y-axis ticks to be scaled by the maximum number of elements
+    elements_stride=max_elements/len(ax1.get_yticks())
+    ax2.set_yticks(np.arange(0,max_elements+elements_stride,elements_stride))
+    ax2.set_yticklabels(["{:.4f}".format(tick / max_elements) for tick in ax2.get_yticks()])
 
     ax1.grid(False)
     plt.savefig("p", dpi=300)
@@ -323,14 +370,9 @@ if __name__=="__main__":
     fileout=plumedat_replace(fileout,"rmax","{:.4f}".format(max(min_r)),fileout)
     fileout=plumedat_replace(fileout,"pmin","{:.4f}".format(Pmin),fileout)
     fileout=plumedat_replace(fileout,"deltap","{:.4f}".format(deltaP),fileout)
-    cmd=f"plumed driver --mf_{mf} ../{args.xtc} --plumed {args.plumedat}"
-    output,error=run_command(dir_name,cmd)
     filein=dir_name+"/probe-0-stats.csv"
+    if not os.path.isfile(filein):
+       cmd=f"plumed driver --mf_{mf} ../{args.xtc} --plumed {args.plumedat}"
+       output,error=run_command(dir_name,cmd)
     data=pd.read_csv(filein,sep=" ")
     plot_activity(data,args.nbins)
-    
-    
-
-    
-
-    
