@@ -21,47 +21,47 @@ def parse():
     args = parser.parse_args()
     return args
 
-def process_xyz(input_xyz, snap_stride,snap_begin,snap_end):
+def process_xyz(input_xyz,stride,frame_begin,frame_end):
     filein=open(input_xyz)
     line_id=0
-    first_line=""
-    second_line=""
-    snap_id=0
-    atom_crd=[]
-    snap_crd=[]
+    atom_id=0
+    frame_id=0
     atomlist=[]
-    
+    crd_frame=[]
+    crd=[]
     for line in filein:
         if (line_id==0):
-            first_line=line
-            n_atoms=int(first_line)
-        elif (line.startswith("Step") or (line.startswith("Probe"))): #too specific!
+            #print(f"starting frame {frame_id}")
+            n_atoms=int(line)
+        elif (line_id%(n_atoms+2)==0):
+            frame_id=frame_id+1
+            #print(f"starting frame {frame_id}") 
+        elif (line_id%(n_atoms+2)==1):
+            #print(f"This is the comment line in frame {frame_id}")
             pass
-        elif (line_id>0 and line==first_line): #New snapshot: add last snapshot to atom_crd and reset snap_crd
-            if (snap_id>=snap_begin and snap_id%snap_stride==0):
-               atom_crd.append(snap_crd)
-            snap_crd=[]
-            snap_id=snap_id+1
-            if (snap_id>=snap_end):
-                break
-        elif (snap_id<snap_begin):
-            pass
-        elif (snap_id%snap_stride==0):
+        else:
+            #print(f"This atom {atom_id} of frame {frame_id}")
             line=line.split()
             if (len(atomlist)<n_atoms):
-                try: # if reading from protein.xyz
-                   atom_id=int(line[0])-1
-                except: # if reading from probe-0.xyz
-                   atom_id=0
-                atomlist.append(atom_id)
-            crd_j=[float(line[1])/10,float(line[2])/10,float(line[3])/10]
-            snap_crd.append(crd_j)
-        else:
-            pass
+                try:
+                   atomlist.append(int(line[0])-1)
+                except:
+                   pass
+            crd_frame.append([float(line[1])/10,float(line[2])/10,float(line[3])/10])
+            atom_id=atom_id+1
+            if (line_id%(n_atoms+2)==(n_atoms+1)):
+                #print(f"This was the last atom in frame {frame_id}.")
+                if ((frame_id>=frame_begin) and (frame_id%stride==0)):
+                    #print(f"appending frame {frame_id}")
+                    crd.append(crd_frame)
+                if (frame_id==frame_end):
+                    #print("This was the last requested frame")
+                    break
+                crd_frame=[]
+                atom_id=0
         line_id=line_id+1
-        
-    atom_crd=np.array(atom_crd)    
-    return atomlist,atom_crd
+    #sys.exit()      
+    return atomlist,crd
 
 def mktraj(xyz,id):
     top=mdtraj.Topology()
@@ -70,6 +70,7 @@ def mktraj(xyz,id):
     residue=top.add_residue(resname,chain)
     top.add_atom("P"+str(id).zfill(2),mdtraj.element.helium,residue)
     trj=mdtraj.Trajectory(xyz,top)
+    print(trj)
     return trj
 
 def stack_traj(protein_traj,probes_trj):
@@ -117,14 +118,16 @@ if __name__=="__main__":
     frame_begin=int(args.time_begin/args.timestep)
     if args.time_end!=np.inf:
         frame_end=int(args.time_end/args.timestep)
-        print(frame_begin,frame_end,args.stride)
-        traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)[frame_begin:frame_end:args.stride]
+        #print(frame_begin,frame_end,args.stride)
+        traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)[frame_begin:frame_end+1:args.stride]
         print(len(traj_obj))
     else:
         traj_obj=mdtraj.load(args.input_traj,top=args.input_gro)
         frame_end=len(traj_obj)
-        print(frame_begin,frame_end,args.stride)
-        traj_obj=traj_obj[frame_begin:frame_end:args.stride]
+        #print(frame_begin,frame_end,args.stride)
+        traj_obj=traj_obj[frame_begin:frame_end+1:args.stride]
+
+    print(traj_obj)    
     
     if (args.input_xyz is not None):
        atomlist, xyz_prot=process_xyz(args.input_xyz,args.stride,frame_begin,frame_end)
@@ -133,6 +136,7 @@ if __name__=="__main__":
     else:
         atomlist=traj_obj.topology.select(args.subset)
         subset=traj_obj.atom_slice(atomlist)
+    print(subset)
 
     n_atoms=len(traj_obj.xyz[0])
 
