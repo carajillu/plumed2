@@ -14,81 +14,61 @@ delta0: minimum value of delta to consider a point a cluster centre
 OUTPUT:
 rhodelta: pd data frame with the info it is defined with at the beginning
 '''
-def laio(r,rmax,delta_min):
-    rhodelta=pd.DataFrame()
-    rhodelta["point"]=range(0,len(r))
-    rhodelta["rho"]=[0]*len(r)
-    rhodelta["nnhd"]=[-1]*len(r)
-    rhodelta["delta"]=[0.]*len(r)
-    rhodelta["cluster"]=[-1]*len(r)
-    rhodelta["cluster_centre"]=[-1]*len(r)
+def laio(r, rmax, delta_min, rho_min=None):
+    rhodelta = pd.DataFrame()
+    rhodelta["point"] = range(len(r))
+    rhodelta["rho"] = [0] * len(r)
+    rhodelta["nnhd"] = [-1] * len(r)
+    rhodelta["delta"] = [0.] * len(r)
+    rhodelta["cluster"] = [-1] * len(r)
+    rhodelta["cluster_centre"] = [-1] * len(r)
     
-    print("Assigning densitites")
-    for i in range(0,len(rhodelta)):
-        rhodelta.rho[i]=len(np.where(r[i]<=rmax)[0])
-   
+    print("Assigning densities")
+    for i in range(len(rhodelta)):
+        rhodelta.at[i, "rho"] = len(np.where(r[i] <= rmax)[0])
+    
+    if rho_min is not None:
+       rhodelta = rhodelta[rhodelta["rho"] >= rho_min]
+
     print("Calculating deltas")
-    for i in range(0,len(rhodelta)):
-        hd=rhodelta.point[rhodelta.rho>rhodelta.rho[i]].values
-        #print(hd)
-        if len(hd)==0:
-            rhodelta.delta[i]=max(r[i])
-            rhodelta.nnhd[i]=-1
+    for i in rhodelta.index:
+        hd = rhodelta.loc[rhodelta.rho > rhodelta.at[i, "rho"], "point"].values
+        if len(hd) == 0:
+            rhodelta.at[i, "delta"] = max(r[i])
             continue
-        rhd=r[i][hd]
-        rhodelta.delta[i]=np.min(rhd)
-        minrhd_i=np.where(rhd==np.min(rhd))[0]
-        if (len(minrhd_i)==1):
-            minrhd_i=minrhd_i[0]
+        rhd = r[i][hd]
+        rhodelta.at[i, "delta"] = np.min(rhd)
+        minrhd_i = np.where(rhd == np.min(rhd))[0]
+        if len(minrhd_i) == 1:
+            minrhd_i = minrhd_i[0]
         else:
-            rhos=rhodelta.rho[minrhd_i].values
-            minrhd_i=minrhd_i[np.where(rhos==np.max(rhos))]   
-        #print(minrhd_i)
-        rhodelta.nnhd[i]=hd[minrhd_i]
+            rhos = rhodelta.loc[minrhd_i, "rho"].values
+            minrhd_i = minrhd_i[np.argmax(rhos)]
+        rhodelta.at[i, "nnhd"] = hd[minrhd_i]
 
-    #choose cluster centers
-    print(rhodelta.sort_values("delta",ascending=False)[0:50])
-    
     if delta_min is None:
-       z="start"
-       while (type(z)!=float):
-           z=input("Please indicate the minimum delta for a point to be considered a cluster centre\n")
-           try: 
-               z=float(z)
-           except:
-               print("Looks like you didn't give me a float. Try again\n")
-    else:
-        z=delta_min
+        delta_min = np.percentile(rhodelta['delta'], 75)
+        print(f"using delta0 = {delta_min}")
 
-    cluster_centers=[]
-    for i in range(0,len(rhodelta)):
-        if rhodelta.delta[i]>=z:
-            cluster_centers.append(rhodelta.point[i])
+    cluster_centers = []
+    for i in rhodelta.index:
+        if rhodelta.at[i, "delta"] >= delta_min:
+            cluster_centers.append(rhodelta.at[i, "point"])
 
+    for i in cluster_centers:
+        rhodelta.at[i, "cluster"] = cluster_centers.index(i)
+        rhodelta.at[i, "cluster_centre"] = i
 
-    #Assign cluster ids to cluster centres
-    for i in range(0,len(cluster_centers)):
-        point_i=cluster_centers[i]
-        rhodelta.cluster[point_i]=i
-        rhodelta.cluster_centre[point_i]=point_i
-
-    #Assign rest of points to clusters
-    rhodelta.sort_values("rho",ascending=False,inplace=True,ignore_index=True)
-    for i in range(0,len(rhodelta)):
-        if rhodelta.cluster[i]!=-1:
+    rhodelta.sort_values("rho", ascending=False, inplace=True, ignore_index=True)
+    for i in rhodelta.index:
+        if rhodelta.at[i, "cluster"] != -1:
             continue
-        nnhd=rhodelta.nnhd[i]
-        #print(np.where(rhodelta.point==nnhd))
-        #return
-        nnhd_j=np.where(rhodelta.point==nnhd)[0][0] #index of rhodelta.nnhd[i] in the sorted dataframe
-        rhodelta.cluster[i]=rhodelta.cluster[nnhd_j]
-        rhodelta.cluster_centre[i]=rhodelta.cluster_centre[nnhd_j]
-        #print(nnhd,nnhd_j,rhodelta.cluster[nnhd_j])
-    
-    #pickle rhodelta
-    print(rhodelta)
-    rhodelta.sort_values("cluster",inplace=True,ignore_index=True)
-    rhodelta.to_csv("rhodelta.csv",index=False,sep=" ")
+        nnhd = rhodelta.at[i, "nnhd"]
+        nnhd_j = rhodelta[rhodelta.point == nnhd].index[0]
+        rhodelta.at[i, "cluster"] = rhodelta.at[nnhd_j, "cluster"]
+        rhodelta.at[i, "cluster_centre"] = rhodelta.at[nnhd_j, "cluster_centre"]
+
+    rhodelta.sort_values("cluster", inplace=True, ignore_index=True)
     return rhodelta
 
     
@@ -102,7 +82,7 @@ r: (mxm) np.array with the pairwise distances.
 def calc_distance_matrix(xyz):
     r=pymp.shared.array((len(xyz),len(xyz)),dtype=np.float64)
     for i in range(0,len(xyz)):
-        print("Calculating distances for point {0} of {1}".format(i,len(xyz)))
+        #print("Calculating distances for point {0} of {1}".format(i,len(xyz)))
         with pymp.Parallel() as p:
             for j in p.range(i+1,len(xyz)):
                 r[i][j]=np.linalg.norm((xyz[i]-xyz[j]))
