@@ -40,7 +40,7 @@ static void COREFUNCTIONS::calculate_r(vector<double> &r,
   #pragma omp parallel for
   for (unsigned j=n_ligand; j<n_atoms; j++)
   {
-   r[j]=sqrt(pow(rx,2)+pow(ry,2)+pow(rz,2));
+   r[j]=sqrt(pow(rx[j],2)+pow(ry[j],2)+pow(rz[j],2));
   }
   return;
 }

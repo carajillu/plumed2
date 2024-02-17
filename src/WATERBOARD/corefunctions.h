@@ -20,7 +20,7 @@ namespace COREFUNCTIONS
                          unsigned n_ligand, unsigned n_atoms);
 
  static void calculate_dr_dx(vector<double> &dr_dx, 
-                             vector<double> &r, vector<double> &rx
+                             vector<double> &r, vector<double> &rx,
                              unsigned n_ligand, unsigned n_atoms);
 }
 #endif

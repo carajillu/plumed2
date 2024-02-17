@@ -24,6 +24,7 @@
 
 //CV modules
 #include "corefunctions.h"
+#include "com.h"
 
 using namespace std;
 
@@ -56,17 +57,17 @@ class Waterboard : public Colvar {
 
   vector<AtomNumber> atoms;
   unsigned n_atoms;
-  vector<vector<double>> atoms_xyz;
 
   vector<AtomNumber> ligand;
   unsigned n_ligand;
+  vector<vector<double>> ligand_xyz;
   vector<double> masses_ligand;
   double ligand_total_mass;
-  vector<double> com_ligand;
-  vector<double> d_com_dxyz;
+  Com ligand_com;
 
   vector<AtomNumber> water;
   unsigned n_water;
+  vector<vector<double>> water_xyz;
 
   vector<double> rx;
   vector<double> ry;
@@ -112,40 +113,22 @@ Waterboard::Waterboard(const ActionOptions&ao):
   cout << "---------------------- Initialising WATERBOARD collective variable ----------------------" << endl;
   parseAtomList("LIGAND",ligand);
   n_ligand=ligand.size();
+  masses_ligand=vector<double>(n_ligand,0);
   cout << "Ligand has " << n_ligand << " atoms" << endl;
   atoms.insert(atoms.end(),ligand.begin(),ligand.end());
+  water_xyz=vector<vector<double>>(n_water,vector<double>(3,0));
 
   parseAtomList("WATER",water);
   n_water=water.size();
   cout << "Water has " << n_water << " atoms" << endl;
   atoms.insert(atoms.end(),water.begin(),water.end());
+  water_xyz=vector<vector<double>>(n_water,vector<double>(3,0));
   
   n_atoms=atoms.size();
   cout << "Plumed is going to request " << n_atoms << "  atoms" << endl;
   requestAtoms(atoms);
 
   checkRead();
-
-  // com vectors
-  com_ligand=vector<double>(3);
-  d_com_dxyz=vector<double>(n_ligand);
-  
-  // distance vetors
-  rx=vector<double>(n_water,0);
-  ry=vector<double>(n_water,0);
-  rz=vector<double>(n_water,0);
-  r=vector<double>(n_water,0);
-  
-  dr_dx=vector<double>(n_water,0);
-  dr_dy=vector<double>(n_water,0);
-  dr_dz=vector<double>(n_water,0);
-
-  cout << "Initialising atom coordinate vectors ..." << endl;
-  for (unsigned j=0; j<n_atoms; j++)
-  {
-    atoms_xyz.push_back(vector<double>(3));
-  }
-  cout << "     ... coordinate vectors initialised." << endl;
 
   cout << "Initialising WATERBOARD derivatives" << endl;
   d_wtb_dx=vector<double>(n_atoms,0);
@@ -154,6 +137,8 @@ Waterboard::Waterboard(const ActionOptions&ao):
   cout << "     ... deerivatives initialised." << endl;
   
   cout << "---------------------- WATERBOARD initialisation complete ----------------------" << endl;
+
+  ligand_com=Com();
 }
 
 
@@ -161,36 +146,37 @@ Waterboard::Waterboard(const ActionOptions&ao):
 void Waterboard::calculate() {
   unsigned step=getStep();
 
-  //This should be done at setup, but getMass seems not to work before calculate
+  //Initialise
   if (step==0)
   {
-    for (unsigned j = 0; j < n_ligand; j++)
+    cout << "get ligand masses" << endl;
+    for (unsigned j=0; j<n_ligand; j++)
     {
-     masses_ligand.push_back(getMass(j));
-     d_com_dxyz.push_back(getMass(j));
-     ligand_total_mass+=getMass(j);
+     masses_ligand[j]=getMass(j);
     }
-    for (unsigned j=0;j<n_ligand;j++)
-    {
-     d_com_dxyz[j]/=ligand_total_mass;
-    }
+    ligand_com.init(n_ligand,masses_ligand);
   }
 
-  
-
-  //#pragma omp parallel for
+  //Get atom coordinates
+  #pragma omp parallel for
   for (unsigned j = 0; j < n_atoms; j++)
    {
-    atoms_xyz[j][0] = getPosition(j)[0];
-    atoms_xyz[j][1] = getPosition(j)[1];
-    atoms_xyz[j][2] = getPosition(j)[2];
+    if (j<n_ligand)
+    {
+     ligand_xyz[j][0]=getPosition(j)[0];
+     ligand_xyz[j][1]=getPosition(j)[1];
+     ligand_xyz[j][2]=getPosition(j)[2];
+    }
+    else
+    {
+     water_xyz[j][0]=getPosition(j)[0];
+     water_xyz[j][1]=getPosition(j)[1];
+     water_xyz[j][2]=getPosition(j)[2];
+    }
    }
-   com_ligand=COREFUNCTIONS::calculate_com(atoms_xyz,n_ligand,masses_ligand,ligand_total_mass);
-   cout << "Ligand_com: " << com_ligand[0] << "," << com_ligand[1] << "," << com_ligand[2] << "," << endl;
 
-
-
-
+   //calculate COM
+   ligand_com.calculate_com(ligand_xyz); 
 
   setValue(wtb);
 
