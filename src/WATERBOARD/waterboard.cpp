@@ -141,7 +141,7 @@ Waterboard::Waterboard(const ActionOptions&ao):
   masses_ligand=vector<double>(n_ligand,0);
   cout << "Ligand has " << n_ligand << " atoms" << endl;
   atoms.insert(atoms.end(),ligand.begin(),ligand.end());
-  ligand_xyz=vector<vector<double>>(n_water,vector<double>(3,0));
+  ligand_xyz=vector<vector<double>>(n_ligand,vector<double>(3,0));
   com_xyz=vector<double>(3,0); //coordinates of the ligand COM, size()=3
   dcom_dligand=vector<double>(n_ligand,0); // derivative of com respect to ligand atom, size()=n_ligand
 
@@ -202,14 +202,17 @@ void Waterboard::calculate() {
   //Get ligand masses and ligand COM derivatives
   if (step==0)
   {
-    cout << "get ligand masses" << endl;
+    //cout << "get ligand masses" << endl;
     for (unsigned j=0; j<n_ligand; j++)
     {
-     ligand_total_mass+=getMass(j);
+
+     //ligand_total_mass+=getMass(j);
+     ligand_total_mass+=1;
     }
     for (unsigned j=0; j<n_ligand; j++)
     {
-      dcom_dligand[j]=getMass(j)/ligand_total_mass;
+      //dcom_dligand[j]=getMass(j)/ligand_total_mass;
+      dcom_dligand[j]=1/ligand_total_mass;
     }
   }
 
@@ -228,9 +231,9 @@ void Waterboard::calculate() {
     }
     else
     {
-     water_xyz[j][0]=getPosition(j)[0];
-     water_xyz[j][1]=getPosition(j)[1];
-     water_xyz[j][2]=getPosition(j)[2];
+     water_xyz[j-n_ligand][0]=getPosition(j)[0];
+     water_xyz[j-n_ligand][1]=getPosition(j)[1];
+     water_xyz[j-n_ligand][2]=getPosition(j)[2];
     }
    }
 
