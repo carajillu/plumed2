@@ -20,10 +20,12 @@ class Probe
   double Pmin; // packing factor below which depth term equals 0
   double deltaP; // interval over which depth term turns from 0 to 1
   double Kpert;
+  unsigned pertstride; // We apply a full random perturbation every pertstride steps
   
   //stuff
   unsigned n_atoms;
   unsigned probe_id;
+  bool restart_probes;
   bool dxcalc; // avoid derivative calculation when perturbing probe
 
   vector<double> rx;
@@ -84,16 +86,21 @@ class Probe
   arma::mat R; //rotation matrix
   void kabsch();
 
+  //for probe perturbation
+  void rand_pert();
+
  public:
-    Probe(unsigned Probe_id, 
+    Probe(unsigned Probe_id, bool restart_probes,
           double RMin, double DeltaRmin, 
           double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
-          unsigned N_atoms, double kpert);
+          double kpert, unsigned Pertstride,
+          unsigned N_atoms);
     
     void place_probe(double x, double y, double z);
-    void perturb_probe();
+    void get_atoms_restart(vector<vector<double>> restart_xyz);
+    void perturb_probe(unsigned step);
 
     
     void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);

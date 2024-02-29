@@ -18,14 +18,16 @@ using namespace COREFUNCTIONS;
 #define zero_tol 0.000001
 
 
-Probe::Probe(unsigned Probe_id, 
+Probe::Probe(unsigned Probe_id, bool Restart_probes,
             double RMin, double DeltaRmin, 
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
             double psimin, double deltapsi, 
-            unsigned N_atoms, double kpert)
+            double kpert, unsigned Pertstride,
+            unsigned N_atoms)
 {
   probe_id=Probe_id;
+  restart_probes=Restart_probes;
   dxcalc=true;
   n_atoms=N_atoms;
   Rmin=RMin; // mind below which an atom is considered to be clashing with the probe 
@@ -37,6 +39,7 @@ Probe::Probe(unsigned Probe_id,
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
+  pertstride=Pertstride;
 
   //allocate vectors
   rx=vector<double>(n_atoms,0);
@@ -99,28 +102,58 @@ void Probe::place_probe(double x, double y, double z)
   xyz[2]=z;
 }
 
-void Probe::perturb_probe()
+void Probe::rand_pert()
 {
-  if (activity==1)
+  double rand_x=COREFUNCTIONS::random_double(-1,1);
+  double rand_y=COREFUNCTIONS::random_double(-1,1);
+  double rand_z=COREFUNCTIONS::random_double(-1,1);
+  double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
+  xyz[0]+=Kpert/norm*rand_x;
+  xyz[1]+=Kpert/norm*rand_y;
+  xyz[2]+=Kpert/norm*rand_z;
   return;
+}
 
-  if (activity==0)
+void Probe::perturb_probe(unsigned step)
+{
+  if (pertstride>0 and step%pertstride==0 and total_enclosure>0)
   {
-   double rand_x=COREFUNCTIONS::random_double(-1,1);
-   double rand_y=COREFUNCTIONS::random_double(-1,1);
-   double rand_z=COREFUNCTIONS::random_double(-1,1);
-   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
-   xyz[0]+=Kpert/norm*rand_x;
-   xyz[1]+=Kpert/norm*rand_y;
-   xyz[2]+=Kpert/norm*rand_z;
+   rand_pert();
+   return;
   }
+
+  if (activity==1)
+  {
+   //cout << "activity = " << activity << ". Probe staying in place." << endl;
+   return;
+  }
+
+  //Random kpert perturbation
+  if ((C==0) or //region is completely occluded
+  (P==0 and total_enclosure>0))// probe is just a bit too far from the protein
+  {
+   //cout << "Step " << step << " random pert" << endl;
+   //cout << "C = " << C << ". Moving probe at random." << endl;
+   rand_pert(); 
+  }
+  //kpert perturbation towards the centre of the protein
+  else if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
+  { 
+   //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
+   double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
+   xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
+   xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
+   xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+  }
+  //(1-activity)*kpert perturbation in the direction of the derivatives
   else if (activity>0 and activity<1)
   {
+   //cout << "activity = " << activity << ". Moving probe in the direction of the force" << endl;
    double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
    //F=-dV/dx meaning that we have to subtract the derivatives, not add them!
-   xyz[0]-=Kpert/norm*d_activity_dprobe[0];
-   xyz[1]-=Kpert/norm*d_activity_dprobe[1];
-   xyz[2]-=Kpert/norm*d_activity_dprobe[2];
+   xyz[0]+=(1-activity)*Kpert/norm*d_activity_dprobe[0];
+   xyz[1]+=(1-activity)*Kpert/norm*d_activity_dprobe[1];
+   xyz[2]+=(1-activity)*Kpert/norm*d_activity_dprobe[2];
   }
   return;
 }
@@ -301,7 +334,7 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
  //remove centroid from atom coordinates
  for (unsigned j=0; j<n_atoms;j++)
   {
-   if (step==0)
+   if (step==0 and !restart_probes)
    {
    atomcoords_0.row(j).col(0)=atoms_x[j]-centroid[0];
    atomcoords_0.row(j).col(1)=atoms_y[j]-centroid[1];
@@ -343,6 +376,26 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   }
 }
 
+void Probe::get_atoms_restart(vector<vector<double>> restart_xyz)
+{
+ centroid0[0]=0;
+ centroid0[1]=0;
+ centroid0[2]=0;
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  centroid0[0]+=restart_xyz[j][0]/n_atoms;
+  centroid0[1]+=restart_xyz[j][1]/n_atoms;
+  centroid0[2]+=restart_xyz[j][2]/n_atoms;
+ }
+
+ for (unsigned j=0; j<n_atoms; j++)
+ {
+  atomcoords_0.row(j).col(0)=restart_xyz[j][0]-centroid0[0];
+  atomcoords_0.row(j).col(1)=restart_xyz[j][1]-centroid0[1];
+  atomcoords_0.row(j).col(2)=restart_xyz[j][2]-centroid0[2];
+ }
+ return;
+}
 void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
 {
   string filename = "probe-";
