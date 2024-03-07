@@ -80,6 +80,9 @@ class Waterboard : public Colvar {
   vector<double> ry;
   vector<double> rz;
   vector<double> r;
+  vector<double> dr_dxcom;
+  vector<double> dr_dycom;
+  vector<double> dr_dzcom;
   //derivatives of the distance with respect to each atom, size()=n_atoms
   vector<double> dr_dx;
   vector<double> dr_dy;
@@ -87,6 +90,7 @@ class Waterboard : public Colvar {
 
   //exp(-(r-R0)^2), size()=n_water
   vector<double> er;
+  vector<double> der_dr;
   //derivatives of exp(-(r-R0)^2), size()=n_atoms
   vector<double> der_dx;
   vector<double> der_dy;
@@ -170,12 +174,13 @@ Waterboard::Waterboard(const ActionOptions&ao):
   dr_dy=vector<double>(n_atoms,0);
   dr_dz=vector<double>(n_atoms,0);
 
+  dr_dxcom=vector<double>(n_water,0);
+  dr_dycom=vector<double>(n_water,0);
+  dr_dzcom=vector<double>(n_water,0);
+
   //exp(-(r-R0)^2), size()=n_water
   er=vector<double>(n_water,0);
-  //derivatives of exp(-(r-R0)^2), size()=n_atoms
-  der_dx=vector<double>(n_atoms,0);
-  der_dy=vector<double>(n_atoms,0);
-  der_dz=vector<double>(n_atoms,0);
+  der_dr=vector<double>(n_water,0);
 
   d_wtb_dx=vector<double>(n_atoms,0);
   d_wtb_dy=vector<double>(n_atoms,0);
@@ -189,6 +194,9 @@ Waterboard::Waterboard(const ActionOptions&ao):
 void Waterboard::reset()
 {
   fill(com_xyz.begin(), com_xyz.end(), 0);
+  fill(dr_dx.begin(), dr_dx.end(), 0);
+  fill(dr_dy.begin(), dr_dy.end(), 0);
+  fill(dr_dz.begin(), dr_dz.end(), 0);
   wtb=0;
   fill(d_wtb_dx.begin(), d_wtb_dx.end(), 0);
   fill(d_wtb_dy.begin(), d_wtb_dy.end(), 0);
@@ -202,25 +210,23 @@ void Waterboard::calculate() {
   //Get ligand masses and ligand COM derivatives
   if (step==0)
   {
+    ligand_total_mass=0;
     //cout << "get ligand masses" << endl;
-    for (unsigned j=0; j<n_ligand; j++)
+    for (unsigned l=0; l<n_ligand; l++)
     {
-
+     masses_ligand[l]=1;
      //ligand_total_mass+=getMass(j);
-     ligand_total_mass+=1;
+     ligand_total_mass+=masses_ligand[l];
     }
-    for (unsigned j=0; j<n_ligand; j++)
+    for (unsigned l=0; l<n_ligand; l++)
     {
       //dcom_dligand[j]=getMass(j)/ligand_total_mass;
-      dcom_dligand[j]=1/ligand_total_mass;
+      dcom_dligand[l]=masses_ligand[l]/ligand_total_mass;
     }
   }
-
-  // Calculate distances between COM and waters
-
-
+  
   //Get atom coordinates
-  #pragma omp parallel for
+  //#pragma omp parallel for
   for (unsigned j = 0; j < n_atoms; j++)
    {
     if (j<n_ligand)
@@ -238,68 +244,65 @@ void Waterboard::calculate() {
    }
 
    //Get the coordinates of ligand COM
-   for (unsigned j=0; j<ligand.size(); j++)
+   for (unsigned l=0; l<ligand.size(); l++)
    {
-    com_xyz[0]+=ligand_xyz[j][0]*masses_ligand[j];
-    com_xyz[1]+=ligand_xyz[j][1]*masses_ligand[j];
-    com_xyz[2]+=ligand_xyz[j][2]*masses_ligand[j];
+    com_xyz[0]+=ligand_xyz[l][0]*masses_ligand[l];
+    com_xyz[1]+=ligand_xyz[l][1]*masses_ligand[l];
+    com_xyz[2]+=ligand_xyz[l][2]*masses_ligand[l];
    }
    com_xyz[0]/=ligand_total_mass;
    com_xyz[1]/=ligand_total_mass;
    com_xyz[2]/=ligand_total_mass;
-
    //Get distances between ligand COM and waters and their derivatives
-   #pragma omp parallel for
-   for (unsigned j=0; j<n_water;j++)
+   //#pragma omp parallel for
+   for (unsigned w=0; w<n_water;w++)
    {
-    rx[j]=com_xyz[0]-water_xyz[j][0];
-    ry[j]=com_xyz[1]-water_xyz[j][1];
-    rz[j]=com_xyz[2]-water_xyz[j][2];
-    r[j]=sqrt(pow(rx[j],2)+pow(ry[j],2)+pow(rz[j],2));
+    rx[w]=com_xyz[0]-water_xyz[w][0];
+    ry[w]=com_xyz[1]-water_xyz[w][1];
+    rz[w]=com_xyz[2]-water_xyz[w][2];
+    r[w]=sqrt(pow(rx[w],2)+pow(ry[w],2)+pow(rz[w],2));
+    dr_dxcom[w]=rx[w]/r[w];
+    dr_dycom[w]=ry[w]/r[w];
+    dr_dzcom[w]=rz[w]/r[w];
    }
 
-   #pragma omp parallel for
-   for (unsigned j=0; j<n_atoms; j++)
+   //#pragma omp parallel for
+   for (unsigned w=0; w<n_water;w++)
    {
-    if (j<n_ligand)
+    if (r[w]<=r0)
     {
-     dr_dx[j]=rx[j]/r[j]*dcom_dligand[j];
-     dr_dy[j]=ry[j]/r[j]*dcom_dligand[j];
-     dr_dz[j]=rz[j]/r[j]*dcom_dligand[j];
+      er[w]=1;
+      der_dr[w]=0;
     }
     else
     {
-     dr_dx[j]=-rx[j]/r[j];
-     dr_dy[j]=-ry[j]/r[j];
-     dr_dz[j]=-rz[j]/r[j];
+      er[w]=exp(-pow((r[w]-r0),2));
+      der_dr[w]=-2*(r[w]-r0)*er[w];
+    }
+    //#pragma omp critical
+    {
+     wtb+=er[w];
     }
    }
 
-   // Get the exponential functions of r and the wtb score, and derivatives
-   #pragma omp parallel for
-   for (unsigned j=0; j<n_water;j++)
+  for (unsigned j=0; j<n_atoms; j++)
+  {
+   if (j<n_ligand)
    {
-    if (r[j]<=r0)
+    for (unsigned w=0;w<n_water;w++)
     {
-      er[j]=1;
-      der_dx[j]=0;
-      der_dy[j]=0;
-      der_dz[j]=0;
+      d_wtb_dx[j]+=der_dr[w]*dr_dxcom[w]*dcom_dligand[j];
+      d_wtb_dy[j]+=der_dr[w]*dr_dycom[w]*dcom_dligand[j];
+      d_wtb_dz[j]+=der_dr[w]*dr_dzcom[w]*dcom_dligand[j];
     }
-    else
-    {
-      er[j]=exp(-pow((r[j]-r0),2));
-      der_dx[j]=er[j]*2*(r[j]-r0)*dr_dx[j];
-      der_dy[j]=er[j]*2*(r[j]-r0)*dr_dy[j];
-      der_dz[j]=er[j]*2*(r[j]-r0)*dr_dz[j];
-    }
-    #pragma omp critical
-    {
-     wtb+=er[j];
-     d_wtb_dx[j]+=der_dx[j];
-     d_wtb_dy[j]+=der_dy[j];
-     d_wtb_dz[j]+=der_dz[j];
-    }
+   }
+   else
+   {
+    unsigned w=j-n_ligand;
+    d_wtb_dx[j]=-der_dr[w]*dr_dxcom[w];
+    d_wtb_dy[j]=-der_dr[w]*dr_dycom[w];
+    d_wtb_dz[j]=-der_dr[w]*dr_dzcom[w];
+   }
    }
 
   setValue(wtb);
@@ -308,6 +311,7 @@ void Waterboard::calculate() {
   {
    //cout << "Assigning derivative " << j << ": " << d_wtb_dx[j] << " " << d_wtb_dy[j] << " " << d_wtb_dz[j] << " " << endl;
    setAtomsDerivatives(j,Vector(d_wtb_dx[j],d_wtb_dy[j],d_wtb_dz[j]));
+   //setAtomsDerivatives(j,Vector(dr_dx[j],dr_dy[j],dr_dz[j]));
   }
   //setBoxDerivatives  (-invvalue*Tensor(distance,distance));
 }
