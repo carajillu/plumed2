@@ -21,9 +21,7 @@
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "colvar/Colvar.h"
 #include "core/ActionRegister.h"
-
-//CV modules
-#include "corefunctions.h"
+#include <omp.h>
 
 using namespace std;
 
@@ -122,6 +120,13 @@ Waterboard::Waterboard(const ActionOptions&ao):
   PLUMED_COLVAR_INIT(ao),
   nopbc(false)
 {
+  int nthreads;
+  #pragma omp parallel 
+  {
+   nthreads = omp_get_num_threads();
+  }
+  cout << "---------------------- Available Computing Resources ------------------------------------" << endl;
+  cout << "PLUMED initialised with " << nthreads << " OMP threads " << endl;
   addValueWithDerivatives(); 
   setNotPeriodic();
 
@@ -226,7 +231,7 @@ void Waterboard::calculate() {
   }
   
   //Get atom coordinates
-  //#pragma omp parallel for
+  #pragma omp parallel for
   for (unsigned j = 0; j < n_atoms; j++)
    {
     if (j<n_ligand)
@@ -254,7 +259,7 @@ void Waterboard::calculate() {
    com_xyz[1]/=ligand_total_mass;
    com_xyz[2]/=ligand_total_mass;
    //Get distances between ligand COM and waters and their derivatives
-   //#pragma omp parallel for
+   #pragma omp parallel for
    for (unsigned w=0; w<n_water;w++)
    {
     rx[w]=com_xyz[0]-water_xyz[w][0];
@@ -266,7 +271,7 @@ void Waterboard::calculate() {
     dr_dzcom[w]=rz[w]/r[w];
    }
 
-   //#pragma omp parallel for
+   #pragma omp parallel for
    for (unsigned w=0; w<n_water;w++)
    {
     if (r[w]<=r0)
@@ -279,7 +284,7 @@ void Waterboard::calculate() {
       er[w]=exp(-pow((r[w]-r0),2));
       der_dr[w]=-2*(r[w]-r0)*er[w];
     }
-    //#pragma omp critical
+    #pragma omp critical
     {
      wtb+=er[w];
     }
