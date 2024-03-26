@@ -220,7 +220,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       If so, all probes will be initialised in the centre of ATOMS_INIT.
       Otherwise, each probe will be initialised on a protein atom chosen at random.
       */      
-      if (n_init==0)
+      if (n_init==0 and !restart_probes)
       {
         cout << "geting random atoms_init" << endl;
         for (unsigned i=0; i<nprobes; i++)
@@ -524,6 +524,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        vector<vector<double>> protein_xyz=aidefunctions::read_xyz("protein.xyz",restart_frame);
        for (unsigned i=0; i<nprobes; i++)
        {
+        cout << "Restarting probe " << i << endl;
         string filename = "probe-";
         filename.append(to_string(i));
         filename.append(".xyz");
