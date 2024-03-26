@@ -29,6 +29,7 @@
 #include <cmath>
 #include <chrono>
 #include <armadillo>
+#include <bandicoot>
 #include <omp.h>
 #include "aidefunctions.h"
 
@@ -114,9 +115,10 @@ namespace PLMD
       //for when correction of derivatives fails
       arma::mat A;
       arma::mat B;
-      arma::mat Bt;
-      arma::vec v;
-      arma::vec c;
+      coot::mat Bcoot;
+      coot::mat Bt;
+      coot::vec v;
+      coot::vec c;
 
       double err_tol=0.00000000001;
       bool dumpderivatives;
@@ -356,9 +358,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         dxnonull_size=0;
         A=arma::mat(6,n_atoms);
         B=arma::mat(n_atoms,n_atoms);
-        Bt=arma::mat(n_atoms,n_atoms);
-        v=arma::vec(n_atoms);
-        c=arma::vec(n_atoms);
+        Bcoot=coot::mat(n_atoms,n_atoms);
+        Bt=coot::mat(n_atoms,n_atoms);
+        v=coot::vec(n_atoms);
+        c=coot::vec(n_atoms);
       }
       else
       {
@@ -420,8 +423,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
       //cout << "Generating matrices" << endl;
       
-      v=arma::vec(dxnonull_size);
-      fill(v.begin(),v.end(),1);
+      v=coot::vec(dxnonull_size,1);
 
       A=arma::mat(6,dxnonull_size);
       unsigned k=0;
@@ -429,20 +431,21 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         if (!dxnonull[j])
             continue;
-        A.row(0).col(k)=d_Psi_dx[j];
-        A.row(1).col(k)=d_Psi_dy[j];
-        A.row(2).col(k)=d_Psi_dz[j];
-        A.row(3).col(k)=tx[j];
-        A.row(4).col(k)=ty[j];
-        A.row(5).col(k)=tz[j];
+        A(0,k)=d_Psi_dx[j];
+        A(1,k)=d_Psi_dy[j];
+        A(2,k)=d_Psi_dz[j];
+        A(3,k)=tx[j];
+        A(4,k)=ty[j];
+        A(5,k)=tz[j];
         k++;
       }
       
       //cout << "Matrix ops" << endl;
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
       B=arma::null(A);
+      Bcoot=coot::conv_to<coot::mat>::from(B);
       Bt=B.t();
-      c=(B*arma::inv_sympd(Bt*B)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
+      c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
       //cout << "Assigning correction" << endl;
       k=0;
@@ -457,7 +460,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           wfile << setprecision(16);
           wfile << step << " " << j << " " 
                 << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
-                << as_scalar(A.row(3).col(k)) << " " << as_scalar(A.row(4).col(k)) << " " << as_scalar(A.row(5).col(k)) << " " 
+                << A(3,k) << " " << A(4,k) << " " << A(5,k) << " " 
                 << c[k] << endl;      
           wfile.close();          
         }
@@ -570,7 +573,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     // calculator
     void Ghostprobe::calculate()
     {
-      //arma::arma_version ver;
+      //coot::arma_version ver;
       //cout << ver.as_string() << endl;
       //exit(0);
       auto start_psi = high_resolution_clock::now();
