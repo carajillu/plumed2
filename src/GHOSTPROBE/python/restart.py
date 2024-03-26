@@ -19,7 +19,8 @@ if __name__=="__main__":
     cmd=f"tail -n {n} {args.dir}/{args.input_xyz} > protein.xyz"
     os.system(cmd)
     for i in range(0,args.nprobes):
-        protein=read(args.dir+"/probe-"+str(i)+".xyz",index=-1)
-        write("probe_"+str(i)+".xyz",protein,format="xyz")
+        id=str(i)
+        cmd=f"tail -n 3 {args.dir}/probe-{id}.xyz > probe-{id}.xyz"
+        os.system(cmd)
     
 
