@@ -22,6 +22,7 @@
 #include "colvar/Colvar.h"
 #include "core/ActionRegister.h"
 #include <omp.h>
+#include <iostream>
 
 using namespace std;
 
