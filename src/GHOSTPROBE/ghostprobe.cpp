@@ -103,8 +103,6 @@ namespace PLMD
       vector<double> tx;
       vector<double> ty;
       vector<double> tz;
-      vector<bool> dxnonull;
-      unsigned dxnonull_size;
       double sum_d_dx;
       double sum_d_dy;
       double sum_d_dz;
@@ -354,13 +352,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         tx=vector<double>(n_atoms,0);
         ty=vector<double>(n_atoms,0);
         tz=vector<double>(n_atoms,0);
-        dxnonull=vector<bool>(n_atoms,false);
-        dxnonull_size=0;
         A=arma::mat(6,n_atoms);
         B=arma::mat(n_atoms,n_atoms);
         Bcoot=coot::mat(n_atoms,n_atoms);
         Bt=coot::mat(n_atoms,n_atoms);
         v=coot::vec(n_atoms);
+        v.fill(1);
         c=coot::vec(n_atoms);
       }
       else
@@ -380,11 +377,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(d_Psi_dx.begin(), d_Psi_dx.end(), 0);
       fill(d_Psi_dy.begin(), d_Psi_dy.end(), 0);
       fill(d_Psi_dz.begin(), d_Psi_dz.end(), 0);
-      fill(dxnonull.begin(), dxnonull.end(), false);
-      dxnonull_size=0;
       fill(tx.begin(),tx.end(),0);
       fill(ty.begin(),ty.end(),0);
       fill(tz.begin(),tz.end(),0);
+      A.zeros();
       sum_d_dx = 0;
       sum_d_dy = 0;
       sum_d_dz = 0;
@@ -412,33 +408,19 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         tx[j]=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
         ty[j]=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
         tz[j]=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
-        dxnonull[j]=true;
-        dxnonull_size++;
       }
 
-      //if all derivatives are equal to 0 skip this step
-      if (dxnonull_size==0)
-      {
-        return;
-      }
       //cout << "Generating matrices" << endl;
-      
-      v=coot::vec(dxnonull_size,1);
-      v.fill(1);
-
-      A=arma::mat(6,dxnonull_size);
-      unsigned k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
-        if (!dxnonull[j])
+        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
             continue;
-        A.row(0).col(k)=d_Psi_dx[j];
-        A.row(1).col(k)=d_Psi_dy[j];
-        A.row(2).col(k)=d_Psi_dz[j];
-        A.row(3).col(k)=tx[j];
-        A.row(4).col(k)=ty[j];
-        A.row(5).col(k)=tz[j];
-        k++;
+        A.row(0).col(j)=d_Psi_dx[j];
+        A.row(1).col(j)=d_Psi_dy[j];
+        A.row(2).col(j)=d_Psi_dz[j];
+        A.row(3).col(j)=tx[j];
+        A.row(4).col(j)=ty[j];
+        A.row(5).col(j)=tz[j];
       }
       
       //cout << "Matrix ops" << endl;
@@ -449,10 +431,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
       //cout << "Assigning correction" << endl;
-      k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
-        if (!dxnonull[j])
+        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
            continue;
         if (dumpderivatives and step%probestride==0)
         {
@@ -461,17 +442,16 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           wfile << setprecision(16);
           wfile << step << " " << j << " " 
                 << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
-                << A(3,k) << " " << A(4,k) << " " << A(5,k) << " " 
-                << c[k] << endl;      
+                << tx[j] << " " << ty[j] << " " << tz[j] << " " 
+                << c[j] << endl;      
           wfile.close();          
         }
-        d_Psi_dx[j]*=c[k];
-        d_Psi_dy[j]*=c[k];
-        d_Psi_dz[j]*=c[k];
-        tx[j]*=c[k];
-        ty[j]*=c[k];
-        tz[j]*=c[k];
-        k++;
+        d_Psi_dx[j]*=c[j];
+        d_Psi_dy[j]*=c[j];
+        d_Psi_dz[j]*=c[j];
+        tx[j]*=c[j];
+        ty[j]*=c[j];
+        tz[j]*=c[j];
       }
 
       //cout << "checking that correction worked" << endl;
@@ -488,7 +468,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if ((sum_d_dx>err_tol) or (sum_d_dy>err_tol) or (sum_d_dz>err_tol) or 
           (sum_t_dx>err_tol) or (sum_t_dy>err_tol) or (sum_t_dz>err_tol))
       {
-      cout << "Error: Correction of derivatives malfunctioned. Simulation will now end." << endl;
+      cout << "Error at step " << step << ": Correction of derivatives malfunctioned. Simulation will now end." << endl;
       cout << "Sum derivatives: " << sum_d_dx << " " << sum_d_dy << " " << sum_d_dz << endl;
       cout << "Sum torques: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
       exit(0);
