@@ -424,6 +424,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       //cout << "Generating matrices" << endl;
       
       v=coot::vec(dxnonull_size,1);
+      v.fill(1);
 
       A=arma::mat(6,dxnonull_size);
       unsigned k=0;
@@ -431,12 +432,12 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         if (!dxnonull[j])
             continue;
-        A(0,k)=d_Psi_dx[j];
-        A(1,k)=d_Psi_dy[j];
-        A(2,k)=d_Psi_dz[j];
-        A(3,k)=tx[j];
-        A(4,k)=ty[j];
-        A(5,k)=tz[j];
+        A.row(0).col(k)=d_Psi_dx[j];
+        A.row(1).col(k)=d_Psi_dy[j];
+        A.row(2).col(k)=d_Psi_dz[j];
+        A.row(3).col(k)=tx[j];
+        A.row(4).col(k)=ty[j];
+        A.row(5).col(k)=tz[j];
         k++;
       }
       
@@ -444,7 +445,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
       B=arma::null(A);
       Bcoot=coot::conv_to<coot::mat>::from(B);
-      Bt=B.t();
+      Bt=Bcoot.t();
       c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       
       //cout << "Assigning correction" << endl;
