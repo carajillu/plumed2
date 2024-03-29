@@ -50,10 +50,14 @@ namespace PLMD
 
     class Ghostprobe : public Colvar
     {
-      // Execution control variables
+      // Resources
       int nthreads=0;     // number of available OMP threads
       int ndev=0;         // number of available OMP accelerators
-      bool performance; // print execution time
+
+      // Time measuement
+      bool performance;
+      int time_mat_ops;
+
       // MD control variables
       bool pbc;
       // CV control variables
@@ -193,7 +197,27 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       parseFlag("NOUPDATE", noupdate);
       parseFlag("NODXFIX", nodxfix);
       parseFlag("PERFORMANCE", performance);
+      if (performance)
+      {
+       ofstream wfile;
+       wfile.open("performance.txt");
+       wfile << "Psi correction" << endl;
+       wfile.close();
+       
+       //ofstream wfile;
+       wfile.open("performance_dxfix.txt");
+       wfile << "torques A B Bcoot Bt c correction test total" << endl;
+       wfile.close();
+      }
+
       parseFlag("DUMPDERIVATIVES",dumpderivatives);
+      if (dumpderivatives)
+      {
+        ofstream wfile;
+        wfile.open("derivatives.csv");
+        wfile << "Step Atom dx dy dz tx ty tz correction" << endl;
+        wfile.close();
+      }
 
       parseFlag("RESTART_PROBES",restart_probes);
       if (restart_probes)
@@ -380,7 +404,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       fill(tx.begin(),tx.end(),0);
       fill(ty.begin(),ty.end(),0);
       fill(tz.begin(),tz.end(),0);
-      A.zeros();
+      A=A.zeros();
       sum_d_dx = 0;
       sum_d_dy = 0;
       sum_d_dz = 0;
@@ -392,15 +416,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     void Ghostprobe::correct_derivatives()
     {
       //cout << "entering derivatives correction" << endl;
-      if (step==0 and dumpderivatives)
-      {
-        ofstream wfile;
-        wfile.open("derivatives.csv");
-        wfile << "Step Atom dx dy dz tx ty tz correction" << endl;
-        wfile.close();
-      }
-
+      auto start_dxfix = high_resolution_clock::now();
       //cout << "Step 0: calculating torques" << endl;
+      auto start_tor = high_resolution_clock::now();
       for (unsigned j=0; j<n_atoms;j++)
       {
         if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
@@ -409,12 +427,14 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         ty[j]=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
         tz[j]=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
       }
+      auto end_tor = high_resolution_clock::now();
 
       //cout << "Generating matrices" << endl;
+      auto start_A = high_resolution_clock::now();
       for (unsigned j=0; j<n_atoms; j++)
       {
-        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
-            continue;
+       // if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
+        //    continue;
         A.row(0).col(j)=d_Psi_dx[j];
         A.row(1).col(j)=d_Psi_dy[j];
         A.row(2).col(j)=d_Psi_dz[j];
@@ -422,15 +442,36 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         A.row(4).col(j)=ty[j];
         A.row(5).col(j)=tz[j];
       }
+      auto end_A = high_resolution_clock::now();
       
       //cout << "Matrix ops" << endl;
       //Apply https://math.stackexchange.com/questions/4686718/how-to-solve-a-linear-system-with-more-variables-than-equations-with-constraints/4686826#4686826
+      auto start_B = high_resolution_clock::now();
       B=arma::null(A);
+      auto end_B = high_resolution_clock::now();
+
+      auto start_Bcoot = high_resolution_clock::now();
       Bcoot=coot::conv_to<coot::mat>::from(B);
+      auto end_Bcoot = high_resolution_clock::now();
+
+      auto start_Bt = high_resolution_clock::now();
       Bt=Bcoot.t();
-      c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
-      
+      auto end_Bt = high_resolution_clock::now();
+
+      coot::mat BtB(n_atoms,n_atoms);
+      coot::vec Btv(n_atoms);
+      coot::vec x(n_atoms);
+
+      auto start_c = high_resolution_clock::now();
+      //c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
+      BtB=Bt*Bcoot;
+      Btv=Bt*v;
+      x=coot::solve(BtB,Btv);
+      c=Bcoot*x;
+      auto end_c = high_resolution_clock::now();
+
       //cout << "Assigning correction" << endl;
+      auto start_correction = high_resolution_clock::now();
       for (unsigned j=0; j<n_atoms; j++)
       {
         if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
@@ -453,8 +494,10 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         ty[j]*=c[j];
         tz[j]*=c[j];
       }
+      auto end_correction = high_resolution_clock::now();
 
       //cout << "checking that correction worked" << endl;
+      auto start_test = high_resolution_clock::now();
       for (unsigned j=0; j<n_atoms; j++)
       {
         sum_d_dx+=d_Psi_dx[j];
@@ -473,6 +516,29 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "Sum torques: " << sum_t_dx << " " << sum_t_dy << " " << sum_t_dz << endl;
       exit(0);
       }
+      auto end_test = high_resolution_clock::now();
+
+      auto end_dxfix = high_resolution_clock::now();
+
+      if (performance and step%probestride==0)
+      {
+        int tor_time = duration_cast<microseconds>(end_tor - start_tor).count();
+        int A_time = duration_cast<microseconds>(end_A - start_A).count();
+        int B_time = duration_cast<microseconds>(end_B - start_B).count();
+        int Bcoot_time = duration_cast<microseconds>(end_Bcoot - start_Bcoot).count();
+        int Bt_time = duration_cast<microseconds>(end_Bt - start_Bt).count();
+        int c_time = duration_cast<microseconds>(end_c - start_c).count();
+        int correction_time = duration_cast<microseconds>(end_correction - start_correction).count();
+        int test_time = duration_cast<microseconds>(end_test - start_test).count();
+        int total = duration_cast<microseconds>(end_dxfix - start_dxfix).count();
+        ofstream wfile;
+        wfile.open("performance_dxfix.txt",std::ios_base::app);
+        wfile << tor_time << " " << A_time << " " << B_time << " " << Bcoot_time  << " "<< Bt_time << " " << c_time << " " << correction_time << " " << test_time << " " << total << endl;
+        wfile.close();
+      }
+
+      
+
       //cout << "exiting derivatives correction" << endl;
     }
 
@@ -554,12 +620,9 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
     // calculator
     void Ghostprobe::calculate()
     {
-      //coot::arma_version ver;
-      //cout << ver.as_string() << endl;
-      //exit(0);
-      auto start_psi = high_resolution_clock::now();
       if (pbc)
         makeWhole();
+     
       reset();
 
       step = getStep();
@@ -576,6 +639,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       if (step==0 or noupdate)
          get_init_crd();
 
+      auto start_psi = high_resolution_clock::now();
       #pragma omp parallel for 
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -614,12 +678,15 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         probes[i].perturb_probe(step);
         }
       }
-
+      auto end_psi = high_resolution_clock::now();
+      
       //Correct the Psi derivatives so that they sum 0
+      auto start_dxfix = high_resolution_clock::now();
       if (!nodxfix)
       {
        correct_derivatives();
       }
+      auto end_dxfix = high_resolution_clock::now();
    
       //Send Psi and derivatives back to Plumed
       setValue(Psi);
@@ -634,11 +701,14 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
          print_protein();
        }
       
-      if (performance)
+      if (performance and step%probestride==0)
       {
-       auto end_psi = high_resolution_clock::now();
-       int exec_time = duration_cast<microseconds>(end_psi - start_psi).count();
-       cout << "Step " << step << ": executed in " << exec_time << " microseconds." << endl;
+       int psi_time = duration_cast<microseconds>(end_psi - start_psi).count();
+       int dxfix_time = duration_cast<microseconds>(end_dxfix - start_dxfix).count();
+       ofstream wfile;
+       wfile.open("performance.txt",std::ios_base::app);
+       wfile << psi_time << " " << dxfix_time << endl;
+       wfile.close();
       }
 
       // if (step>=10) exit(0);
