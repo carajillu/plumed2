@@ -113,16 +113,19 @@ namespace PLMD
       double sum_t_dx;
       double sum_t_dy;
       double sum_t_dz;
-
-      //for when correction of derivatives fails
       arma::mat A;
       arma::mat B;
       coot::mat Bcoot;
       coot::mat Bt;
+      coot::mat BtB;
       coot::vec v;
+      coot::vec Btv;
+      coot::vec x;
       coot::vec c;
-
-      double err_tol=0.00000000001;
+      //dxnonull
+      vector<bool> dxnonull;
+      unsigned dxnonull_size;
+      double err_tol=0.00000000001; //for when correction of derivatives fails
       bool dumpderivatives;
 
     public:
@@ -380,9 +383,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         B=arma::mat(n_atoms,n_atoms);
         Bcoot=coot::mat(n_atoms,n_atoms);
         Bt=coot::mat(n_atoms,n_atoms);
+        BtB=coot::mat(n_atoms,n_atoms);
+        Btv=coot::vec(n_atoms);
+        x=coot::vec(n_atoms);
         v=coot::vec(n_atoms);
-        v.fill(1);
         c=coot::vec(n_atoms);
+        dxnonull=vector<bool>(n_atoms,false);
+        dxnonull_size=0;
       }
       else
       {
@@ -411,6 +418,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       sum_t_dx = 0;
       sum_t_dy = 0;
       sum_t_dz = 0;
+      fill(dxnonull.begin(), dxnonull.end(), false);
+      dxnonull_size=0;
     }
 
     void Ghostprobe::correct_derivatives()
@@ -426,21 +435,28 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         tx[j]=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
         ty[j]=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
         tz[j]=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
+        dxnonull[j]=true;
+        dxnonull_size++;
       }
       auto end_tor = high_resolution_clock::now();
 
       //cout << "Generating matrices" << endl;
       auto start_A = high_resolution_clock::now();
+      v.ones(dxnonull_size);
+      
+      A=arma::mat(6,dxnonull_size);
+      unsigned k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
-       // if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
-        //    continue;
-        A.row(0).col(j)=d_Psi_dx[j];
-        A.row(1).col(j)=d_Psi_dy[j];
-        A.row(2).col(j)=d_Psi_dz[j];
-        A.row(3).col(j)=tx[j];
-        A.row(4).col(j)=ty[j];
-        A.row(5).col(j)=tz[j];
+        if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
+            continue;
+        A.row(0).col(k)=d_Psi_dx[j];
+        A.row(1).col(k)=d_Psi_dy[j];
+        A.row(2).col(k)=d_Psi_dz[j];
+        A.row(3).col(k)=tx[j];
+        A.row(4).col(k)=ty[j];
+        A.row(5).col(k)=tz[j];
+        k++;
       }
       auto end_A = high_resolution_clock::now();
       
@@ -458,10 +474,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       Bt=Bcoot.t();
       auto end_Bt = high_resolution_clock::now();
 
-      coot::mat BtB(n_atoms,n_atoms);
-      coot::vec Btv(n_atoms);
-      coot::vec x(n_atoms);
-
       auto start_c = high_resolution_clock::now();
       //c=(Bcoot*coot::pinv(Bt*Bcoot)*Bt*v); //if matrix isn't invertible, pinv() will provide the best approximation
       BtB=Bt*Bcoot;
@@ -472,6 +484,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       //cout << "Assigning correction" << endl;
       auto start_correction = high_resolution_clock::now();
+      k=0;
       for (unsigned j=0; j<n_atoms; j++)
       {
         if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
@@ -484,15 +497,16 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
           wfile << step << " " << j << " " 
                 << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << " "
                 << tx[j] << " " << ty[j] << " " << tz[j] << " " 
-                << c[j] << endl;      
+                << c[k] << endl;      
           wfile.close();          
         }
-        d_Psi_dx[j]*=c[j];
-        d_Psi_dy[j]*=c[j];
-        d_Psi_dz[j]*=c[j];
-        tx[j]*=c[j];
-        ty[j]*=c[j];
-        tz[j]*=c[j];
+        d_Psi_dx[j]*=c[k];
+        d_Psi_dy[j]*=c[k];
+        d_Psi_dz[j]*=c[k];
+        tx[j]*=c[k];
+        ty[j]*=c[k];
+        tz[j]*=c[k];
+        k++;
       }
       auto end_correction = high_resolution_clock::now();
 
