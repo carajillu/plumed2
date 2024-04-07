@@ -291,6 +291,7 @@ void Waterboard::calculate() {
     }
    }
 
+  #pragma omp parallel for
   for (unsigned j=0; j<n_atoms; j++)
   {
    if (j<n_ligand)
@@ -312,7 +313,8 @@ void Waterboard::calculate() {
    }
 
   setValue(wtb);
-
+  
+  #pragma omp parallel for
   for (unsigned j=0;j<n_atoms;j++)
   {
    //cout << "Assigning derivative " << j << ": " << d_wtb_dx[j] << " " << d_wtb_dy[j] << " " << d_wtb_dz[j] << " " << endl;
