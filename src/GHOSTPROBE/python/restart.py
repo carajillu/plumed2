@@ -1,4 +1,3 @@
-from ase.io import read, write
 import os
 import argparse
 def parse():
