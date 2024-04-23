@@ -104,40 +104,20 @@ void Probe::place_probe(double x, double y, double z)
 
 void Probe::rand_pert()
 {
+  double k=(1-activity);
   double rand_x=COREFUNCTIONS::random_double(-1,1);
   double rand_y=COREFUNCTIONS::random_double(-1,1);
   double rand_z=COREFUNCTIONS::random_double(-1,1);
   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
-  xyz[0]+=Kpert/norm*rand_x;
-  xyz[1]+=Kpert/norm*rand_y;
-  xyz[2]+=Kpert/norm*rand_z;
+  xyz[0]+=k*Kpert*(rand_x/norm);
+  xyz[1]+=k*Kpert*(rand_y/norm);
+  xyz[2]+=k*Kpert*(rand_z/norm);
   return;
 }
 
 void Probe::perturb_probe(unsigned step)
 {
-  if (pertstride>0 and step%pertstride==0 and total_enclosure>0)
-  {
-   rand_pert();
-   return;
-  }
-
-  if (activity==1)
-  {
-   //cout << "activity = " << activity << ". Probe staying in place." << endl;
-   return;
-  }
-
-  //Random kpert perturbation
-  if ((C==0) or //region is completely occluded
-  (P==0 and total_enclosure>0))// probe is just a bit too far from the protein
-  {
-   //cout << "Step " << step << " random pert" << endl;
-   //cout << "C = " << C << ". Moving probe at random." << endl;
-   rand_pert(); 
-  }
-  //kpert perturbation towards the centre of the protein
-  else if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
+  if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
   { 
    //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
    double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
@@ -145,15 +125,14 @@ void Probe::perturb_probe(unsigned step)
    xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
    xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
   }
-  //(1-activity)*kpert perturbation in the direction of the derivatives
-  else if (activity>0 and activity<1)
+  //(1-activity)*kpert perturbation in a random direction
+  else
   {
-   //cout << "activity = " << activity << ". Moving probe in the direction of the force" << endl;
-   double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
-   //F=-dV/dx meaning that we have to subtract the derivatives, not add them!
-   xyz[0]+=(1-activity)*Kpert/norm*d_activity_dprobe[0];
-   xyz[1]+=(1-activity)*Kpert/norm*d_activity_dprobe[1];
-   xyz[2]+=(1-activity)*Kpert/norm*d_activity_dprobe[2];
+   if (pertstride>0 and step%pertstride==0)
+  {
+   activity=0; //make a full perturbation regardless of activity
+  }
+   rand_pert();
   }
   return;
 }

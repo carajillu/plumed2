@@ -700,6 +700,11 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
 
         //perturb probe coordinates  at every step (if activity<1)
+        /*
+        perturb_probe() needs to go after calculation of activity
+        if we are using the derivatives to define the direction of the perturbation.
+        If not, we can put it at the top, where it might make a bit more sense.
+        */
         if (kpert>0)
         {
         probes[i].perturb_probe(step);
