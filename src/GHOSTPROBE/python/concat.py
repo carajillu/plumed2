@@ -9,7 +9,8 @@ def parse():
     parser.add_argument('-p','--top', nargs="?", help="Topology file for mdtraj",default="prod_0/prod.gro")
     parser.add_argument('-t','--xtc', nargs="?", help="Name of the RAW Gromacs trajectory files (must be the same in all directories)",default="prod.xtc")
     parser.add_argument('-s','--ndir', nargs="?", help="Number of simulation directories",default=1)
-    parser.add_argument('-a','--pattern', nargs="?", help="pattern matching the directory names",default="prod_")
+    parser.add_argument('-a','--pattern', nargs="?", help="pattern matching the directory names. Simulation index (starting at 0) will be appended at the end.",default="prod_")
+    parser.add_argument('-b', '--nsim', nargs="?", type=int, help="Number of simulations sto concatenate (MUST start at 0, be consecutive and follow a pattern)",default=1)
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed (must be the same in all directories)",default="protein.xyz")
     parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes (must be the same in all directories)",default=1)
     args = parser.parse_args()
@@ -52,21 +53,29 @@ if __name__=="__main__":
     os.makedirs("concat",exist_ok=True)
 
     
-    xtc_lst=glob.glob(args.pattern+"*/"+args.xtc)
+    xtc_lst=[]
+    for i in range(0,args.nsim):
+        xtc_lst.append(args.pattern+str(i)+"/"+args.xtc)
+
     print(args.top)
     print(xtc_lst)
     xtc=concat_xtc(topology=args.top,names=xtc_lst,outfile="concat/"+args.xtc)
     
-    print(args.pattern+"*/"+args.input_xyz)
-    protein_lst=glob.glob(args.pattern+"*/"+args.input_xyz)
+    
+    protein_lst=[]
+    for i in range(0,args.nsim):
+        protein_lst.append(args.pattern+str(i)+"/"+args.input_xyz)
     print(protein_lst)
     protein=concat_xyz(names=protein_lst,outfile="concat/"+args.input_xyz)
 
 
     for i in range(0,args.nprobes):
-        probe_i_lst=glob.glob(args.pattern+"*/probe-"+str(i)+".xyz")
+        probe_i_lst=[]
+        stats_i_lst=[]
+        for j in range(0,args.nsim):
+            probe_i_lst.append(args.pattern+str(j)+"/probe-"+str(i)+".xyz")
+            stats_i_lst.append(args.pattern+str(j)+"/probe-"+str(i)+"-stats.csv")
         probe_i=concat_xyz(names=probe_i_lst,outfile="concat/probe-"+str(i)+".xyz")
-        stats_i_lst=glob.glob(args.pattern+"*/probe-"+str(i)+"-stats.csv")
         stats_i=concat_df(names=stats_i_lst,outfile="concat/probe-"+str(i)+"-stats.csv")
         print(probe_i_lst)
 
