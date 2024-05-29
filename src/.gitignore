@@ -64,6 +64,10 @@
 !/s2cm
 !/pytorch
 !/membranefusion
+
+!/GHOSTPROBE
+!/WATERBOARD
+
 !/wham
 
 # And just ignore these files

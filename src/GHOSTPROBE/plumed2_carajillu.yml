@@ -1,0 +1,19 @@
+name: plumed2_carajillu
+channels:
+    - nvidia
+    - conda-forge
+    - defaults
+dependencies:
+    - cmake
+    - make
+    - openmpi
+    - armadillo
+    - libgfortran
+    - gcc_linux-64=10
+    - gxx_linux-64=10
+    - cudatoolkit=11.3
+    - cudatoolkit-dev=11.3  
+    - libblas=*=*openblas
+    - liblapack=*=*openblas
+    - fftw
+
