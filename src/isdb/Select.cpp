@@ -31,7 +31,9 @@ namespace isdb {
 
 //+PLUMEDOC ISDB_FUNCTION SELECT
 /*
-Selects an argument based on the value of a \ref SELECTOR.
+Selects an argument based on the value of a SELECTOR.
+
+You should read the documentation for \ref SELECTOR to understand this action better.
 
 \par Examples
 
@@ -80,6 +82,7 @@ void Select::registerKeywords(Keywords& keys) {
   Function::registerKeywords(keys);
   keys.use("ARG");
   keys.add("compulsory","SELECTOR","name of the variable used to select");
+  keys.setValueDescription("the value of the selected argument");
 }
 
 Select::Select(const ActionOptions&ao):

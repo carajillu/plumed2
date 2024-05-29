@@ -26,7 +26,7 @@
 namespace PLMD {
 namespace colvar {
 
-//+PLUMEDOC COLVAR GYRATION
+//+PLUMEDOC COLVAR GYRATION_FAST
 /*
 Calculate the radius of gyration, or other properties related to it.
 
@@ -83,19 +83,21 @@ private:
   int rg_type;
   bool use_masses;
   bool nopbc;
+  std::vector<Vector> derivatives;
 public:
   static void registerKeywords(Keywords& keys);
   explicit Gyration(const ActionOptions&);
   void calculate() override;
 };
 
-PLUMED_REGISTER_ACTION(Gyration,"GYRATION")
+PLUMED_REGISTER_ACTION(Gyration,"GYRATION_FAST")
 
 void Gyration::registerKeywords(Keywords& keys) {
-  Colvar::registerKeywords(keys);
+  Colvar::registerKeywords(keys); keys.setDisplayName("GYRATION");
   keys.add("atoms","ATOMS","the group of atoms that you are calculating the Gyration Tensor for");
   keys.add("compulsory","TYPE","RADIUS","The type of calculation relative to the Gyration Tensor you want to perform");
   keys.addFlag("MASS_WEIGHTED",false,"set the masses of all the atoms equal to one");
+  keys.setValueDescription("the radius of gyration");
 }
 
 Gyration::Gyration(const ActionOptions&ao):
@@ -176,8 +178,7 @@ void Gyration::calculate() {
   com /= totmass;
 
   double rgyr=0.;
-  std::vector<Vector> derivatives( getNumberOfAtoms() );
-  Tensor virial;
+  derivatives.resize(getNumberOfAtoms());
 
   if(rg_type==RADIUS||rg_type==TRACE) {
     if( use_masses ) {
@@ -185,14 +186,12 @@ void Gyration::calculate() {
         const Vector diff = delta( com, getPosition(i) );
         rgyr          += getMass(i)*diff.modulo2();
         derivatives[i] = diff*getMass(i);
-        virial        -= Tensor(getPosition(i),derivatives[i]);
       }
     } else {
       for(unsigned i=0; i<getNumberOfAtoms(); i++) {
         const Vector diff = delta( com, getPosition(i) );
         rgyr          += diff.modulo2();
         derivatives[i] = diff;
-        virial        -= Tensor(getPosition(i),derivatives[i]);
       }
     }
     double fact;
@@ -205,7 +204,7 @@ void Gyration::calculate() {
     }
     setValue(rgyr);
     for(unsigned i=0; i<getNumberOfAtoms(); i++) setAtomsDerivatives(i,fact*derivatives[i]);
-    setBoxDerivatives(fact*virial);
+    setBoxDerivativesNoPbc();
     return;
   }
 

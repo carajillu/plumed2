@@ -25,6 +25,7 @@
 #include "config/Config.h"
 #include "core/ActionRegister.h"
 #include "core/GenericMolInfo.h"
+#include "core/ModuleMap.h"
 #include <cstdio>
 #include <string>
 #include <iostream>
@@ -79,8 +80,9 @@ int GenJson::main(FILE* in, FILE*out,Communicator& pc) {
   IFile myfile; myfile.open(actionfile); bool stat;
   std::map<std::string,std::string> action_map;
   while((stat=myfile.getline(line))) {
-    std::size_t col = line.find_first_of(":");
-    action_map.insert(std::pair<std::string,std::string>( line.substr(0,col), line.substr(col+1) ) );
+    std::size_t col = line.find_first_of(":"); std::string docs = line.substr(col+1);
+    if( docs.find("\\")!=std::string::npos ) error("found invalid backslash character in first line of documentation for action " + line.substr(0,col) );
+    action_map.insert(std::pair<std::string,std::string>( line.substr(0,col), docs ) );
   }
   myfile.close();
 
@@ -107,16 +109,19 @@ int GenJson::main(FILE* in, FILE*out,Communicator& pc) {
     for(auto c : action ) { if( isdigit(c) ) std::cout<<c; else std::cout<<"_"<<c; }
     std::cout<<".html\","<<std::endl;
     std::cout<<"    \"description\" : \""<<action_map[action_names[i]]<<"\",\n";
+    std::cout<<"    \"module\" : \""<<getModuleMap().find(action_names[i])->second<<"\",\n";
     // Now output keyword information
     Keywords keys; actionRegister().getKeywords( action_names[i], keys );
+    std::cout<<"    \"displayname\" : \""<<keys.getDisplayName()<<"\",\n";
     std::cout<<"    \"syntax\" : {"<<std::endl;
     for(unsigned j=0; j<keys.size(); ++j) {
       std::string desc = keys.getKeywordDescription( keys.getKeyword(j) );
       if( desc.find("default=")!=std::string::npos ) {
         std::size_t brac=desc.find_first_of(")"); desc = desc.substr(brac+1);
       }
-      std::size_t dot=desc.find_first_of(".");
-      std::cout<<"       \""<<keys.getKeyword(j)<<"\" : { \"type\": \""<<keys.getStyle(keys.getKeyword(j))<<"\", \"description\": \""<<desc.substr(0,dot)<<"\", \"multiple\": "<<keys.numbered( keys.getKeyword(j) )<<"}";
+      std::size_t dot=desc.find_first_of("."); std::string mydescrip = desc.substr(0,dot);
+      if( mydescrip.find("\\")!=std::string::npos ) error("found invalid backslash character documentation for keyword " + keys.getKeyword(j) + " in action " + action_names[i] );
+      std::cout<<"       \""<<keys.getKeyword(j)<<"\" : { \"type\": \""<<keys.getStyle(keys.getKeyword(j))<<"\", \"description\": \""<<mydescrip<<"\", \"multiple\": "<<keys.numbered( keys.getKeyword(j) )<<"}";
       if( j==keys.size()-1 && !keys.exists("HAS_VALUES") ) std::cout<<std::endl; else std::cout<<","<<std::endl;
     }
     if( keys.exists("HAS_VALUES") ) {
@@ -127,23 +132,27 @@ int GenJson::main(FILE* in, FILE*out,Communicator& pc) {
       for(unsigned k=0; k<components.size(); ++k) {
         if( keys.getOutputComponentFlag( components[k] )=="default" ) { hasvalue=false; break; }
       }
-      if( hasvalue ) {
-        std::cout<<"         \"value\": {"<<std::endl;
-        std::cout<<"           \"flag\": \"value\","<<std::endl;
-        std::cout<<"           \"description\": \"a scalar quantity\""<<std::endl;
-        if( components.size()==0 ) std::cout<<"         }"<<std::endl; else std::cout<<"         },"<<std::endl;
-      }
       for(unsigned k=0; k<components.size(); ++k) {
-        std::cout<<"         \""<<components[k]<<"\" : {"<<std::endl;
+        std::string compname=components[k]; if( components[k]==".#!value" ) { hasvalue=false; compname="value"; }
+        std::cout<<"         \""<<compname<<"\" : {"<<std::endl;
         std::cout<<"           \"flag\": \""<<keys.getOutputComponentFlag( components[k] )<<"\","<<std::endl;
-        std::string desc=keys.getOutputComponentDescription( components[k] ); std::size_t dot=desc.find_first_of(".");
-        std::cout<<"           \"description\": \""<<desc.substr(0,dot)<<"\""<<std::endl;
+        std::string desc=keys.getOutputComponentDescription( components[k] );
+        std::size_t dot=desc.find_first_of("."); std::string mydescrip = desc.substr(0,dot);
+        if( mydescrip.find("\\")!=std::string::npos ) error("found invalid backslash character documentation for output component " + compname + " in action " + action_names[i] );
+        std::cout<<"           \"description\": \""<<mydescrip<<"\""<<std::endl;
         if( k==components.size()-1 ) std::cout<<"         }"<<std::endl; else std::cout<<"         },"<<std::endl;
       }
+      if( hasvalue && components.size()==0 ) printf("WARNING: no components have been registered for action %s \n", action_names[i].c_str() );
       std::cout<<"       }"<<std::endl;
 
     }
     std::cout<<"    },"<<std::endl;
+    if( keys.getNeededKeywords().size()>0 ) {
+      std::vector<std::string> neededActions( keys.getNeededKeywords() );
+      std::cout<<"    \"needs\" : ["<<"\""<<neededActions[0]<<"\"";
+      for(unsigned j=1; j<neededActions.size(); ++j) std::cout<<", \""<<neededActions[j]<<"\"";
+      std::cout<<"],"<<std::endl;
+    }
     // This ensures that \n is replaced by \\n
     std::string unsafen="\n", safen="\\n", helpstr = keys.getHelpString();
     for( std::size_t pos = helpstr.find("\n");
@@ -161,6 +170,10 @@ int GenJson::main(FILE* in, FILE*out,Communicator& pc) {
   std::cout<<"    },"<<std::endl;
   std::cout<<"    \"@mdatoms\" : { \n"<<std::endl;
   std::cout<<"        \"description\" : \"refers to all the MD codes atoms but not PLUMEDs vatoms\","<<std::endl;
+  std::cout<<"        \"link\" : \"https://www.plumed.org/doc-"<<version<<"/user-doc/html/_group.html\""<<std::endl;
+  std::cout<<"    },"<<std::endl;
+  std::cout<<"    \"@ndx\" : { \n"<<std::endl;
+  std::cout<<"        \"description\" : \"load a group from a GROMACS index file\","<<std::endl;
   std::cout<<"        \"link\" : \"https://www.plumed.org/doc-"<<version<<"/user-doc/html/_group.html\""<<std::endl;
   // Now print all the special keywords in molinfo
   std::map<std::string,std::string> specials( GenericMolInfo::getSpecialKeywords() );

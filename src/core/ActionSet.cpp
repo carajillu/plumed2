@@ -39,4 +39,14 @@ void ActionSet::clearDelete() {
   clear();
 }
 
+ActionShortcut* ActionSet::getShortcutActionWithLabel( const std::string& s ) const {
+  ActionShortcut* scf = NULL;
+  for(const auto & p : (*this)) {
+    ActionShortcut* sc=dynamic_cast<ActionShortcut*>(p.get());
+    if( sc && sc->shortcutlabel==s ) scf = sc;
+  }
+  if( scf ) return scf;
+  return NULL;
+}
+
 }

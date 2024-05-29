@@ -25,6 +25,7 @@
 #ifdef __PLUMED_HAS_SUBPROCESS
 #include <unistd.h>
 #include <csignal>
+#include <sys/wait.h>
 #endif
 
 namespace PLMD {
@@ -41,7 +42,7 @@ inline static bool SubprocessPidGetenvSignals() noexcept {
 class SubprocessPid {
 #ifdef __PLUMED_HAS_SUBPROCESS
 public:
-  pid_t pid;
+  const pid_t pid;
   explicit SubprocessPid(pid_t pid):
     pid(pid)
   {
@@ -50,16 +51,23 @@ public:
   void stop() noexcept {
     // Signals give problems with MPI on Travis.
     // I disable them for now.
-    if(SubprocessPidGetenvSignals()) if(pid!=0 && pid!=-1) kill(pid,SIGSTOP);
+    if(SubprocessPidGetenvSignals()) kill(pid,SIGSTOP);
   }
   void cont() noexcept {
     // Signals give problems with MPI on Travis.
     // I disable them for now.
-    if(SubprocessPidGetenvSignals()) if(pid!=0 && pid!=-1) kill(pid,SIGCONT);
+    if(SubprocessPidGetenvSignals()) kill(pid,SIGCONT);
   }
   ~SubprocessPid() {
-    // this is apparently working also with MPI on Travis.
-    if(pid!=0 && pid!=-1) kill(pid,SIGINT);
+    // the destructor implies we do not need the subprocess anymore, so SIGKILL
+    // is the fastest exit.
+    // if we want to gracefully kill the process with a delay, it would be cleaner
+    // to have another member function
+    kill(pid,SIGKILL);
+    // Wait for the child process to terminate
+    // This is anyway required to avoid leaks
+    int status;
+    waitpid(pid, &status, 0);
   }
 #endif
 };
@@ -91,8 +99,8 @@ Subprocess::Subprocess(const std::string & cmd) {
     if(dup(pc[0])<0) plumed_error()<<"error duplicating file";
     if(close(pc[1])<0) plumed_error()<<"error closing file";
     if(close(cp[0])<0) plumed_error()<<"error closing file";
-    execv(arr[0],arr);
-    plumed_error()<<"error in script file";
+    auto err=execv(arr[0],arr);
+    plumed_error()<<"error in script file " << cmd << ", execv returned "<<err;
   }
 // PARENT::
   default:
@@ -113,11 +121,15 @@ Subprocess::Subprocess(const std::string & cmd) {
 
 Subprocess::~Subprocess() {
 #ifdef __PLUMED_HAS_SUBPROCESS
-// fpc should be closed to terminate the child executable
+// close files:
   fclose(fppc);
+  fclose(fpcp);
+// fclose also closes the underlying descriptors,
+// so this is not needed:
   close(fpc);
-// fcp should not be closed because it could make the child executable fail
-/// TODO: check if this is necessary and make this class exception safe!
+  close(fcp);
+// after closing the communication, the subprocess is killed
+// in pid's destructor
 #endif
 }
 

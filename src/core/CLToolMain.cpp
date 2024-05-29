@@ -27,13 +27,13 @@
 #include "CLToolRegister.h"
 #include "tools/Tools.h"
 #include "tools/DLLoader.h"
+#include "tools/Subprocess.h"
 #include <string>
 #include <cstdlib>
 #include <cstdio>
 #include <iostream>
 #include <algorithm>
 #include <memory>
-#include <unordered_map>
 
 namespace PLMD {
 
@@ -48,9 +48,9 @@ CLToolMain::~CLToolMain() {
 // empty destructor to delete unique_ptr
 }
 
-#define CHECK_NULL(val,word) plumed_massert(val,"NULL pointer received in cmd(\"CLTool " + word + "\")");
+#define CHECK_NULL(val,word) plumed_assert(val) << "NULL pointer received in cmd(\"CLTool " << word <<  "\"";
 
-void CLToolMain::cmd(const std::string& word,const TypesafePtr & val) {
+void CLToolMain::cmd(std::string_view word,const TypesafePtr & val) {
 
 // Enumerate all possible commands:
   enum {
@@ -58,11 +58,12 @@ void CLToolMain::cmd(const std::string& word,const TypesafePtr & val) {
   };
 
 // Static object (initialized once) containing the map of commands:
-  const static std::unordered_map<std::string, int> word_map = {
+  const static Tools::FastStringUnorderedMap<int> word_map = {
 #include "CLToolMainMap.inc"
   };
 
-  std::vector<std::string> words=Tools::getWords(word);
+  gch::small_vector<std::string_view> words;
+  Tools::getWordsSimple(words,word);
   unsigned nw=words.size();
   if(nw==0) {
     // do nothing
@@ -79,12 +80,12 @@ void CLToolMain::cmd(const std::string& word,const TypesafePtr & val) {
       break;
     case cmd_setArgv:
       CHECK_NULL(val,word);
-      v=val.get<const char*const*>(argc);
+      v=val.get<const char*const*>({argc});
       for(int i=0; i<argc; ++i) argv.push_back(std::string(v[i]));
       break;
     case cmd_setArgvLine:
       CHECK_NULL(val,word);
-      vv=val.get<const char*>();
+      vv=val.getCString();
       argv=Tools::getWords(vv);
       break;
     case cmd_setIn:
@@ -120,7 +121,7 @@ void CLToolMain::cmd(const std::string& word,const TypesafePtr & val) {
       }
       break;
     default:
-      plumed_merror("cannot interpret cmd(\"CLTool " + word + "\"). check plumed developers manual to see the available commands.");
+      plumed_error() << "cannot interpret cmd(\"CLTool " << word << "\"). check plumed developers manual to see the available commands.";
       break;
     }
   }
@@ -178,12 +179,7 @@ int CLToolMain::run(int argc, char **argv,FILE*in,FILE*out,Communicator& pc) {
     } else if(Tools::startWith(a,"--load=")) {
       a.erase(0,a.find("=")+1);
       prefix="";
-      void *p=dlloader.load(a);
-      if(!p) {
-        std::fprintf(stderr,"ERROR: cannot load library %s\n",a.c_str());
-        std::fprintf(stderr,"ERROR: %s\n",dlloader.error().c_str());
-        return 1;
-      }
+      dlloader.load(a);
     } else if(a=="--load") {
       prefix="--load=";
     } else if(a[0]=='-') {
@@ -232,22 +228,22 @@ int CLToolMain::run(int argc, char **argv,FILE*in,FILE*out,Communicator& pc) {
       "Commands:\n";
     std::fprintf(out,"%s",msg.c_str());
     for(unsigned j=0; j<availableCxx.size(); ++j) {
-      auto cl=cltoolRegister().create(CLToolOptions(availableCxx[j]));
+      auto cl=cltoolRegister().create(dlloader.getHandles(),CLToolOptions(availableCxx[j]));
       plumed_assert(cl);
       std::string manual=availableCxx[j]+" : "+cl->description();
       std::fprintf(out,"  plumed %s\n", manual.c_str());
     }
     for(unsigned j=0; j<availableShell.size(); ++j) {
       std::string manual;
-#ifdef __PLUMED_HAS_POPEN
-      std::string cmd=config::getEnvCommand()+" \""+root+"/scripts/"+availableShell[j]+".sh\" --description";
-      FILE *fp=popen(cmd.c_str(),"r");
-      std::string line;
-      while(Tools::getline(fp,line))manual+=line;
-      pclose(fp);
-#else
-      manual="(doc not avail)";
-#endif
+      if(Subprocess::available()) {
+        auto cmd=config::getEnvCommand()+" \""+root+"/scripts/"+availableShell[j]+".sh\" --description";
+        auto proc=Subprocess(cmd);
+        // we only need the first line, so this is fine:
+        proc.getline(manual);
+        // process will be killed immediately after
+      } else {
+        manual="(doc not avail)";
+      }
       manual= availableShell[j]+" : "+manual;
       std::fprintf(out,"  plumed %s\n", manual.c_str());
     }
@@ -262,7 +258,7 @@ int CLToolMain::run(int argc, char **argv,FILE*in,FILE*out,Communicator& pc) {
   std::string command(argv[i]);
 
   if(find(availableCxx.begin(),availableCxx.end(),command)!=availableCxx.end()) {
-    auto cl=cltoolRegister().create(CLToolOptions(command));
+    auto cl=cltoolRegister().create(dlloader.getHandles(),CLToolOptions(command));
     plumed_assert(cl);
     // Read the command line options (returns false if we are just printing help)
     if( !cl->readInput( argc-i,&argv[i],in,out ) ) { return 0; }

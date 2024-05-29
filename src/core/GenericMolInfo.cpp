@@ -20,12 +20,12 @@
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "GenericMolInfo.h"
-#include "Atoms.h"
 #include "ActionRegister.h"
 #include "ActionSet.h"
 #include "PlumedMain.h"
 #include "tools/MolDataClass.h"
 #include "tools/PDB.h"
+#include "tools/Communicator.h"
 #include "config/Config.h"
 
 namespace PLMD {
@@ -86,7 +86,7 @@ GenericMolInfo::GenericMolInfo( const ActionOptions&ao ):
   if( read_backbone.size()==0 ) {
     parse("STRUCTURE",reference);
 
-    if( ! pdb.read(reference,plumed.getAtoms().usingNaturalUnits(),0.1/plumed.getAtoms().getUnits().getLength()))plumed_merror("missing input file " + reference );
+    if( ! pdb.read(reference,usingNaturalUnits(),0.1/getUnits().getLength()))plumed_merror("missing input file " + reference );
 
     std::vector<std::string> chains; pdb.getChainNames( chains );
     log.printf("  pdb file named %s contains %u chains \n",reference.c_str(), static_cast<unsigned>(chains.size()));
@@ -250,13 +250,16 @@ void GenericMolInfo::interpretSymbol( const std::string& symbol, std::vector<Ato
     plumed_assert(enablePythonInterpreter);
 
     log<<"  symbol " + symbol + " will be sent to python interpreter\n";
-    if(!selector) {
+    if(!selector_running) {
       log<<"  MOLINFO "<<getLabel()<<": starting python interpreter\n";
       if(comm.Get_rank()==0) {
         selector=Tools::make_unique<Subprocess>(pythonCmd+" \""+config::getPlumedRoot()+"\"/scripts/selector.sh --pdb " + reference);
         selector->stop();
       }
+      selector_running=true;
     }
+
+    atoms.resize(0);
 
     if(comm.Get_rank()==0) {
       int ok=0;
@@ -279,7 +282,6 @@ void GenericMolInfo::interpretSymbol( const std::string& symbol, std::vector<Ato
           if(!words.empty() && words[0]=="Selection:") break;
         }
         words.erase(words.begin());
-        atoms.resize(0);
         for(const auto & w : words) {
           int n;
           if(w.empty()) continue;
@@ -313,6 +315,7 @@ void GenericMolInfo::interpretSymbol( const std::string& symbol, std::vector<Ato
       }
       size_t nat=0;
       comm.Bcast(nat,0);
+      atoms.resize(nat);
       comm.Bcast(atoms,0);
     }
     log<<"  selection interpreted using ";
@@ -359,9 +362,10 @@ bool GenericMolInfo::isWhole() const {
 }
 
 void GenericMolInfo::prepare() {
-  if(selector) {
+  if(selector_running) {
     log<<"  MOLINFO "<<getLabel()<<": killing python interpreter\n";
     selector.reset();
+    selector_running=false;
   }
 }
 

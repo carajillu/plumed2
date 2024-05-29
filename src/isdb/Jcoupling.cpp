@@ -29,7 +29,7 @@ namespace isdb {
 
 //+PLUMEDOC ISDB_COLVAR JCOUPLING
 /*
-Calculates \f$^3J\f$ coupling constants for a dihedral angle.
+Calculates 3J coupling constants for a dihedral angle.
 
 The J-coupling between two atoms is given by the Karplus relation:
 
@@ -106,7 +106,6 @@ public:
 PLUMED_REGISTER_ACTION(JCoupling, "JCOUPLING")
 
 void JCoupling::registerKeywords(Keywords& keys) {
-  componentsAreNotOptional(keys);
   MetainferenceBase::registerKeywords(keys);
   keys.addFlag("NOPBC",false,"ignore the periodic boundary conditions when calculating distances");
   keys.add("numbered", "ATOMS", "the 4 atoms involved in each of the bonds for which you wish to calculate the J-coupling. "

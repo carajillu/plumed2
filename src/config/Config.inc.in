@@ -24,9 +24,27 @@
 #include "version.h"
 #include <cstdlib>
 #include <cstring>
+#include <dlfcn.h>
 
 namespace PLMD {
 namespace config {
+
+namespace {
+/// local tool that, given a string, returns a new string which is:
+/// - enclosed in single quotes (')
+/// - with all single quotes escaped
+std::string escapeForSingleQuote(const std::string& input) {
+  std::string escaped;
+  for (char c : input) {
+    if (c == '\'') {
+      escaped += "'\\''";
+    } else {
+      escaped += c;
+    }
+  }
+  return "'" + escaped + "'";
+}
+}
 
 // This is a fix to allow conda to correctly replace paths in binary files.
 // These functions should not be static or they will be optimized away!
@@ -92,12 +110,12 @@ std::string getPlumedProgramName() {
 }
 
 std::string getEnvCommand() {
-  return "env PLUMED_ROOT=\""+getPlumedRoot()+"\""+
-         " env PLUMED_VERSION=\""+getVersionLong()+"\""+
-         " env PLUMED_HTMLDIR=\""+getPlumedHtmldir()+"\""+
-         " env PLUMED_INCLUDEDIR=\""+getPlumedIncludedir()+"\""+
-         " env PLUMED_PROGRAM_NAME=\""+getPlumedProgramName()+"\""+
-         " env PLUMED_IS_INSTALLED=\""+(@ISINSTALLED@?"yes":"no")+"\"";
+  return "env PLUMED_ROOT="+escapeForSingleQuote(getPlumedRoot())+
+         " PLUMED_VERSION="+escapeForSingleQuote(getVersionLong())+
+         " PLUMED_HTMLDIR="+escapeForSingleQuote(getPlumedHtmldir())+
+         " PLUMED_INCLUDEDIR="+escapeForSingleQuote(getPlumedIncludedir())+
+         " PLUMED_PROGRAM_NAME="+escapeForSingleQuote(getPlumedProgramName())+
+         " PLUMED_IS_INSTALLED='"+(@ISINSTALLED@?"yes":"no")+"'";
 }
 
 std::string getVersion() {
@@ -175,6 +193,18 @@ std::string getCompilationDate() {
 
 std::string getCompilationTime() {
   return __TIME__;
+}
+
+std::string getLibraryPath() {
+#ifdef __PLUMED_HAS_DLADDR
+  Dl_info info;
+  if(dladdr((void*)getLibraryPath,&info)) {
+    return info.dli_fname;
+  } else {
+    return "";
+  }
+#endif
+
 }
 
 

@@ -40,6 +40,7 @@
 #include "tools/Pbc.h"
 #include "tools/PDB.h"
 #include "tools/Torsion.h"
+#include "tools/Communicator.h"
 
 namespace PLMD {
 namespace isdb {
@@ -498,7 +499,6 @@ public:
 PLUMED_REGISTER_ACTION(CS2Backbone,"CS2BACKBONE")
 
 void CS2Backbone::registerKeywords( Keywords& keys ) {
-  componentsAreNotOptional(keys);
   MetainferenceBase::registerKeywords( keys );
   keys.addFlag("NOPBC",false,"ignore the periodic boundary conditions when calculating distances");
   keys.addFlag("SERIAL",false,"Perform the calculation in serial - for debug purpose");
@@ -520,6 +520,7 @@ void CS2Backbone::registerKeywords( Keywords& keys ) {
   keys.addOutputComponent("expca","default","the experimental Ca carbon chemical shifts");
   keys.addOutputComponent("expcb","default","the experimental Cb carbon chemical shifts");
   keys.addOutputComponent("expco","default","the experimental C' carbon chemical shifts");
+  keys.setValueDescription("the backbone chemical shifts");
 }
 
 CS2Backbone::CS2Backbone(const ActionOptions&ao):
@@ -559,15 +560,15 @@ CS2Backbone::CS2Backbone(const ActionOptions&ao):
 
   /* Length conversion (parameters are tuned for angstrom) */
   double scale=1.;
-  if(!plumed.getAtoms().usingNaturalUnits()) {
-    scale = 10.*atoms.getUnits().getLength();
+  if(!usingNaturalUnits()) {
+    scale = 10.*getUnits().getLength();
   }
 
   log.printf("  Initialization of the predictor ...\n");
   db.parse(stringadb,scale);
 
   PDB pdb;
-  if( !pdb.read(stringapdb,plumed.getAtoms().usingNaturalUnits(),1./scale) ) plumed_merror("missing input file " + stringapdb);
+  if( !pdb.read(stringapdb,usingNaturalUnits(),1./scale) ) plumed_merror("missing input file " + stringapdb);
 
   // first of all we build the list of chemical shifts we want to predict
   log.printf("  Reading experimental data ...\n"); log.flush();

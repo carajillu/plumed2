@@ -98,13 +98,13 @@ void ECVlinear::registerKeywords(Keywords& keys)
 {
   ExpansionCVs::registerKeywords(keys);
   keys.remove("ARG");
-  keys.add("compulsory","ARG","the label of the Hamiltonian difference. \\f$\\Delta U\\f$");
+  keys.add("compulsory","ARG","the label of the Hamiltonian difference. Delta U");
   keys.add("compulsory","LAMBDA","0","the lambda at which the underlying simulation runs");
   keys.add("optional","LAMBDA_MIN","( default=0 ) the minimum of the lambda range");
   keys.add("optional","LAMBDA_MAX","( default=1 ) the maximum of the lambda range");
   keys.add("optional","LAMBDA_STEPS","uniformly place the lambda values, for a total of LAMBDA_STEPS");
   keys.add("optional","LAMBDA_SET_ALL","manually set all the lamdbas");
-  keys.addFlag("DIMENSIONLESS",false,"ARG is considered dimensionless rather than an energy, thus is not multiplied by \\f$\\beta\\f$");
+  keys.addFlag("DIMENSIONLESS",false,"ARG is considered dimensionless rather than an energy, thus is not multiplied by beta");
   keys.addFlag("GEOM_SPACING",false,"use geometrical spacing in lambda instead of linear spacing");
 }
 
@@ -124,8 +124,9 @@ ECVlinear::ECVlinear(const ActionOptions&ao)
 
 //parse lambda info
   parse("LAMBDA",lambda0_);
-  double lambda_min=std::numeric_limits<double>::quiet_NaN();
-  double lambda_max=std::numeric_limits<double>::quiet_NaN();
+  const double myNone=std::numeric_limits<double>::lowest(); //quiet_NaN is not supported by some intel compiler
+  double lambda_min=myNone;
+  double lambda_max=myNone;
   parse("LAMBDA_MIN",lambda_min);
   parse("LAMBDA_MAX",lambda_max);
   unsigned lambda_steps=0;
@@ -140,7 +141,7 @@ ECVlinear::ECVlinear(const ActionOptions&ao)
   if(lambdas.size()>0)
   {
     plumed_massert(lambda_steps==0,"cannot set both LAMBDA_STEPS and LAMBDA_SET_ALL");
-    plumed_massert(std::isnan(lambda_min) && std::isnan(lambda_max),"cannot set both LAMBDA_SET_ALL and LAMBDA_MIN/MAX");
+    plumed_massert(lambda_min==myNone && lambda_max==myNone,"cannot set both LAMBDA_SET_ALL and LAMBDA_MIN/MAX");
     plumed_massert(lambdas.size()>=2,"set at least 2 lambdas with LAMBDA_SET_ALL");
     for(unsigned k=0; k<lambdas.size()-1; k++)
       plumed_massert(lambdas[k]<=lambdas[k+1],"LAMBDA_SET_ALL must be properly ordered");
@@ -152,12 +153,12 @@ ECVlinear::ECVlinear(const ActionOptions&ao)
   }
   else
   { //get LAMBDA_MIN and LAMBDA_MAX
-    if(std::isnan(lambda_min))
+    if(lambda_min==myNone)
     {
       lambda_min=0;
       log.printf("  no LAMBDA_MIN provided, using LAMBDA_MIN = %g\n",lambda_min);
     }
-    if(std::isnan(lambda_max))
+    if(lambda_max==myNone)
     {
       lambda_max=1;
       log.printf("  no LAMBDA_MAX provided, using LAMBDA_MAX = %g\n",lambda_max);

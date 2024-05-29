@@ -22,6 +22,7 @@
 #include "colvar/Colvar.h"
 #include "core/ActionRegister.h"
 #include "core/PlumedMain.h"
+#include "tools/Communicator.h"
 #include "tools/Pbc.h"
 #include "tools/RMSD.h"
 #include <string>
@@ -31,7 +32,7 @@ namespace isdb {
 
 //+PLUMEDOC ISDB_COLVAR SHADOW
 /*
-Communicate atoms positions among replicas and calculate the \ref RMSD with respect to a mother (reference) simulation.
+Communicate atoms positions among replicas and calculate the RMSD with respect to a mother (reference) simulation.
 
 The option \ref UPDATE allows to specify the stride for communication between mother and replica systems.
 The flag \ref REFERENCE needs to be specified in the input file of the mother replica.
@@ -114,6 +115,7 @@ void Shadow::registerKeywords( Keywords& keys ) {
   keys.add("atoms","ATOMS","atoms for which we calculate the shadow RMSD");
   keys.add("compulsory","UPDATE","stride for updating reference coordinates");
   keys.addFlag("REFERENCE",false,"this is the reference replica");
+  keys.setValueDescription("the value of the shadow RMSD");
 }
 
 Shadow::Shadow(const ActionOptions&ao):

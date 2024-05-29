@@ -18,7 +18,6 @@ along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 #include "bias/ReweightBase.h"
 #include "core/ActionAtomistic.h"
 #include "core/ActionRegister.h"
-#include "core/Atoms.h"
 #include "core/PlumedMain.h"
 #include "tools/File.h"
 #include "tools/Matrix.h"
@@ -288,7 +287,7 @@ void EDS::registerKeywords(Keywords &keys)
            "CENTER_ARG is for calculated centers, e.g. from a CV or analysis. ");
 
   keys.add("optional", "PERIOD", "Steps over which to adjust bias for adaptive or ramping");
-  keys.add("compulsory", "RANGE", "25.0", "The (starting) maximum increase in coupling constant per PERIOD (in \\f$k_B T\\f$/[BIAS_SCALE unit]) for each CV biased");
+  keys.add("compulsory", "RANGE", "25.0", "The (starting) maximum increase in coupling constant per PERIOD (in k_B T/[BIAS_SCALE unit]) for each CV biased");
   keys.add("compulsory", "SEED", "0", "Seed for random order of changing bias");
   keys.add("compulsory", "INIT", "0", "Starting value for coupling constant");
   keys.add("compulsory", "FIXED", "0", "Fixed target values for coupling constant. Non-adaptive.");
@@ -301,8 +300,7 @@ void EDS::registerKeywords(Keywords &keys)
   keys.add("optional", "VIRIAL", "Add an update penalty for having non-zero virial contributions. Only makes sense with multiple correlated CVs.");
   keys.add("optional", "LOGWEIGHTS", "Add weights to use for computing statistics. For example, if biasing with metadynamics.");
   keys.addFlag("LM", false, "Use Levenberg-Marquadt algorithm along with simultaneous keyword. Otherwise use gradient descent.");
-  keys.addFlag("LM_MIXING", "1", "Initial mixing parameter when using Levenberg-Marquadt minimization.");
-
+  keys.add("compulsory", "LM_MIXING", "1", "Initial mixing parameter when using Levenberg-Marquadt minimization.");
   keys.add("optional", "RESTART_FMT", "the format that should be used to output real numbers in EDS restarts");
   keys.add("optional", "OUT_RESTART", "Output file for all information needed to continue EDS simulation. "
            "If you have the RESTART directive set (global or for EDS), this file will be appended to. "
@@ -387,7 +385,7 @@ EDS::EDS(const ActionOptions &ao) : PLUMED_BIAS_INIT(ao),
   parseVector("FIXED", target_coupling_);
   parseVector("INIT", set_coupling_);
   parse("PERIOD", update_period_);
-  parse("TEMP", temp);
+  kbt_ = getkBT();
   parse("SEED", seed_);
   parse("MULTI_PROP", multi_prop_);
   parse("LM_MIXING", lm_mixing_par_);
@@ -533,11 +531,6 @@ EDS::EDS(const ActionOptions &ao) : PLUMED_BIAS_INIT(ao),
   }
   else
   {
-
-    if (temp >= 0.0)
-      kbt_ = plumed.getAtoms().getKBoltzmann() * temp;
-    else
-      kbt_ = plumed.getAtoms().getKbT();
 
     // in driver, this results in kbt of 0
     if (kbt_ == 0)
@@ -999,7 +992,7 @@ void EDS::update_pseudo_virial()
   {
     // checked in setup to ensure this cast is valid.
     ActionAtomistic *cv = dynamic_cast<ActionAtomistic *>(getPntrToArgument(i)->getPntrToAction());
-    Tensor &v(cv->modifyVirial());
+    Tensor v(cv->getVirial());
     Tensor box(cv->getBox());
     const unsigned int natoms = cv->getNumberOfAtoms();
     if (!volume)

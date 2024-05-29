@@ -18,10 +18,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04 , macos-11]
+        os: [ubuntu-20.04 , macos-12 , macos-14 ]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install conda
       run: |
         curl -LO https://raw.githubusercontent.com/GiovanniBussi/conda-ci/master/conda-ci

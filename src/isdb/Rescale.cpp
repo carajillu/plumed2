@@ -25,10 +25,10 @@
 #include "bias/Bias.h"
 #include "core/ActionRegister.h"
 #include "core/PlumedMain.h"
-#include "core/Atoms.h"
 #include "core/Value.h"
 #include "tools/File.h"
 #include "tools/Random.h"
+#include "tools/Communicator.h"
 #include <ctime>
 
 namespace PLMD {
@@ -144,7 +144,7 @@ class Rescale : public bias::Bias
   std::string selector_;
 
   // Monte Carlo
-  void doMonteCarlo(unsigned igamma, double oldE, std::vector<double> args, std::vector<double> bargs);
+  void doMonteCarlo(unsigned igamma, double oldE, const std::vector<double> & args, const std::vector<double> & bargs);
   unsigned proposeMove(unsigned x, unsigned xmin, unsigned xmax);
   bool doAccept(double oldE, double newE);
   // read and print bias
@@ -177,7 +177,6 @@ void Rescale::registerKeywords(Keywords& keys) {
   keys.add("optional","MC_STEPS","number of MC steps");
   keys.add("optional","MC_STRIDE","MC stride");
   keys.add("optional","PACE", "Pace for adding bias, in MC stride unit");
-  componentsAreNotOptional(keys);
   keys.addOutputComponent("igamma",  "default","gamma parameter");
   keys.addOutputComponent("accgamma","default","MC acceptance for gamma");
   keys.addOutputComponent("wtbias",  "default","well-tempered bias");
@@ -264,10 +263,7 @@ Rescale::Rescale(const ActionOptions&ao):
   Biaspace_ *= MCstride_;
 
   // get temperature
-  double temp=0.0;
-  parse("TEMP",temp);
-  if(temp>0.0) kbt_=plumed.getAtoms().getKBoltzmann()*temp;
-  else kbt_=plumed.getAtoms().getKbT();
+  kbt_=getkBT();
 
   checkRead();
 
@@ -366,7 +362,7 @@ bool Rescale::doAccept(double oldE, double newE)
 }
 
 void Rescale::doMonteCarlo(unsigned igamma, double oldE,
-                           std::vector<double> args, std::vector<double> bargs)
+                           const std::vector<double> & args, const std::vector<double> & bargs)
 {
   double oldB, newB;
 

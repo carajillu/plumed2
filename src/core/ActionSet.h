@@ -23,6 +23,7 @@
 #define __PLUMED_core_ActionSet_h
 
 #include "Action.h"
+#include "ActionShortcut.h"
 #include <memory>
 
 namespace PLMD {
@@ -75,6 +76,8 @@ public:
 /// Typically to be used as selectLatest<Type>(this);
   template <class T>
   T selectLatest(const Action*action)const;
+/// Get any shortcuts with this shortcut label
+  ActionShortcut* getShortcutActionWithLabel( const std::string& s ) const ;
 };
 
 /////
@@ -94,7 +97,7 @@ template <class T>
 T ActionSet::selectWithLabel(const std::string&s)const {
   for(const auto & p : (*this)) {
     T t=dynamic_cast<T>(p.get());
-    if(t && dynamic_cast<Action*>(t)->getLabel()==s) return t;
+    if(t && t->getLabel()==s) return t;
   };
   return NULL;
 }

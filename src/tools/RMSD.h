@@ -108,7 +108,7 @@ public:
   void setType(const std::string & mytype);
 /// set reference coordinates, remove the com by using uniform weights
   void setReference(const std::vector<Vector> & reference);
-  std::vector<Vector> getReference();
+  const std::vector<Vector>& getReference() const ;
 /// set weights and remove the center from reference with normalized weights. If the com has been removed, it resets to the new value
   void setAlign(const std::vector<double> & align, bool normalize_weights=true, bool remove_center=true);
   std::vector<double> getAlign();
@@ -321,7 +321,9 @@ public:
     creference.zero(); for(unsigned i=0; i<reference.size(); i++) {creference+=reference[i]*align[i];} creference_is_calculated=true;
   };
   // assume the center is given externally
+  // cppcheck-suppress passedByValue
   void setPositionsCenter(Vector v) {plumed_massert(!cpositions_is_calculated,"You are setting the center two times!"); cpositions=v; cpositions_is_calculated=true;};
+  // cppcheck-suppress passedByValue
   void setReferenceCenter(Vector v) {plumed_massert(!creference_is_calculated,"You are setting the center two times!"); creference=v; creference_is_calculated=true;};
   // the center is already removed
   void setPositionsCenterIsRemoved(bool t) {cpositions_is_removed=t;};

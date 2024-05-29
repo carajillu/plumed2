@@ -20,6 +20,7 @@
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "ActionSetup.h"
+#include "ActionForInterface.h"
 #include "PlumedMain.h"
 #include "ActionSet.h"
 #include "tools/Exception.h"
@@ -32,8 +33,10 @@ ActionSetup::ActionSetup(const ActionOptions&ao):
 {
   const ActionSet& actionset(plumed.getActionSet());
   for(const auto & p : actionset) {
-// check that all the preceding actions are ActionSetup
-    if( !dynamic_cast<ActionSetup*>(p.get()) && !dynamic_cast<ActionAnyorder*>(p.get()) ) error("Action " + getLabel() + " is a setup action, and should be only preceded by other setup actions or by actions that can be used in any order.");
+    // check that all the preceding actions are ActionSetup
+    if( !dynamic_cast<ActionSetup*>(p.get()) && !dynamic_cast<ActionForInterface*>(p.get()) && !dynamic_cast<ActionAnyorder*>(p.get()) ) {
+      error("Action " + getLabel() + " is a setup action, and should be only preceded by other setup actions or by actions that can be used in any order.");
+    }
   }
 }
 

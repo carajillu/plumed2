@@ -52,7 +52,7 @@ void Optimizer::registerKeywords(Keywords& keys) {
 
   keys.addFlag(
     "NLIST",
-    true,
+    false,
     "Use a neighbor list of ligand-protein atom pairs to speed up the "
     "calculating of the distances."
   );
@@ -102,8 +102,6 @@ void Optimizer::registerKeywords(Keywords& keys) {
     "Optimizer stride. Sets up a callback function that launches the "
     "optimization process every OPTIMIZER_STRIDE."
   );
-
-  componentsAreNotOptional(keys);
 
   keys.addOutputComponent(
     "x",

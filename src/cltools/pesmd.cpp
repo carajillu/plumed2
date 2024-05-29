@@ -109,7 +109,7 @@ public:
     keys.add("compulsory","plumed","plumed.dat","the name of the plumed input file containing the potential");
     keys.add("compulsory","ipos","0.0","the initial position of the system");
     keys.add("compulsory","idum","0","The random number seed");
-    keys.addFlag("periodic","false","are your input coordinates periodic");
+    keys.addFlag("periodic",false,"are your input coordinates periodic");
     keys.add("optional","min","minimum value the coordinates can take for a periodic domain");
     keys.add("optional","max","maximum value the coordinates can take for a periodic domain");
   }
@@ -185,9 +185,9 @@ public:
     int s=sizeof(double);
     plumed->cmd("setRealPrecision",&s);
     if(Communicator::initialized()) plumed->cmd("setMPIComm",&pc.Get_comm());
-    plumed->cmd("setNoVirial");
     int natoms=( std::floor(dim/3) +  2 );
     plumed->cmd("setNatoms",&natoms);
+    plumed->cmd("setNoVirial");
     plumed->cmd("setMDEngine","pesmd");
     plumed->cmd("setTimestep",&tstep);
     plumed->cmd("setPlumedDat",plumedin.c_str());
@@ -224,7 +224,6 @@ public:
     if( lperiod ) plumed->cmd("setBox",&box[0]);
     plumed->cmd("setPositions",&positions[0][0]);
     plumed->cmd("calc");
-
 
     double therm_eng=0;
     FILE* fp=fopen("stats.out","w+");
