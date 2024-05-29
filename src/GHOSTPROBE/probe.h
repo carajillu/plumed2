@@ -21,6 +21,7 @@ class Probe
   double deltaP; // interval over which depth term turns from 0 to 1
   double Kpert;
   unsigned pertstride; // We apply a full random perturbation every pertstride steps
+  double zero_tol=1e-10; //tolerance for zero values
   
   //stuff
   unsigned n_atoms;
@@ -88,6 +89,8 @@ class Probe
 
   //for probe perturbation
   void rand_pert();
+  void dx_pert();
+  void bring_to_centroid();
 
  public:
     Probe(unsigned Probe_id, bool restart_probes,
