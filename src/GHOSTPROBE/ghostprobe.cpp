@@ -143,7 +143,7 @@ namespace PLMD
       arma::vec x;
       arma::vec c;
 
-      double err_tol=0.00000000001;
+      double err_tol=1e-8;
       bool dumpderivatives;
 
     public:
@@ -322,22 +322,22 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parse("CMIN", Cmin);
       if (!Cmin)
-        Cmin = 0.; // obtained from generating 10000 random points in VHL's crystal structure
+        Cmin = 0.; 
       cout << "CMIN = " << Cmin << endl;
 
       parse("DELTAC", deltaC);
       if (!deltaC)
-        deltaC = 7; // obtained from generating 10000 random points in VHL's crystal structure
+        deltaC = 5; 
       cout << "DELTAC = " << deltaC << endl;
 
       parse("PMIN", Pmin);
       if (!Pmin)
-        Pmin = 25; // obtained from generating 10000 random points in VHL's crystal structure
+        Pmin = 0; 
       cout << "PMIN = " << Pmin << endl;
 
       parse("DELTAP", deltaP);
       if (!deltaP)
-        deltaP = 15; // obtained from generating 10000 random points in VHL's crystal structure
+        deltaP = 17; 
       cout << "DELTAP = " << deltaP << endl;
 
       parse("PERTSTRIDE",pertstride);
@@ -353,6 +353,8 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       else
       {
       cout << "Perturbations of " << kpert << " nm will be applied to all probes." << endl;
+      cout << "Perturbations will go in the direction opposite to the derivatives of the activity" << endl;
+      cout << "with respect to the probe, when possible. (Fx=-dV/dx)" << endl;
       }
       
       for (unsigned i = 0; i < nprobes; i++)
@@ -447,6 +449,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       {
         if (d_Psi_dx[j]==0 and d_Psi_dy[j]==0 and d_Psi_dz[j]==0)
            continue;
+        //cout << j << " " << d_Psi_dx[j] << " " << d_Psi_dy[j] << " " << d_Psi_dz[j] << endl;
         tx[j]=atoms_y[j]*d_Psi_dz[j]-atoms_z[j]*d_Psi_dy[j];
         ty[j]=atoms_z[j]*d_Psi_dx[j]-atoms_x[j]*d_Psi_dz[j];
         tz[j]=atoms_x[j]*d_Psi_dy[j]-atoms_y[j]*d_Psi_dx[j];
@@ -456,6 +459,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        //if all derivatives are equal to 0 skip this step
       if (dxnonull_size==0)
       {
+        //cout << "All derivatives are zero. Skipping correction of derivatives." << endl;
         return;
       }
       if (performance and step%probestride==0)  end_tor = high_resolution_clock::now();
