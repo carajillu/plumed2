@@ -15,8 +15,6 @@
 using namespace std;
 using namespace COREFUNCTIONS;
 
-#define zero_tol 0.000001
-
 
 Probe::Probe(unsigned Probe_id, bool Restart_probes,
             double RMin, double DeltaRmin, 
@@ -115,24 +113,54 @@ void Probe::rand_pert()
   return;
 }
 
+void Probe::dx_pert()
+{
+  double k=(1-activity);
+  double norm=sqrt(pow(d_activity_dprobe[0],2)+pow(d_activity_dprobe[1],2)+pow(d_activity_dprobe[2],2));
+  xyz[0]-=k*Kpert*(d_activity_dprobe[0]/norm);
+  xyz[1]-=k*Kpert*(d_activity_dprobe[1]/norm);
+  xyz[2]-=k*Kpert*(d_activity_dprobe[2]/norm);
+}
+
+void Probe::bring_to_centroid()
+{
+ //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
+  double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
+  xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
+  xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
+  xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+}
+
+
 void Probe::perturb_probe(unsigned step)
 {
-  if (total_enclosure==0) //probe is way too far, move it towards the centre of the protein
+  if (P==0) //probe is way too far, move it towards the centre of the protein
   { 
-   //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
-   double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
-   xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
-   xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
-   xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+   bring_to_centroid();
+   //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function bring_to_centroid()" << endl;
   }
-  //(1-activity)*kpert perturbation in a random direction
-  else
+  else if (pertstride>0 and step%pertstride==0)
   {
-   if (pertstride>0 and step%pertstride==0)
-  {
+   //cout << " Step "<< step << ": calling function rand_pert()" << endl;
+   double act_old=activity;
    activity=0; //make a full perturbation regardless of activity
-  }
    rand_pert();
+   activity=act_old;
+  }
+  else if (activity==1)
+  {
+   //cout << " Step "<< step << ": activity = " << activity << ". Doing nothing" << endl;
+   return;
+  }
+  else if (activity>0 and activity<1)
+  {
+    //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function dx_pert()" << endl;
+    dx_pert();
+  }
+  else //activity==0
+  {
+    //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function rand_pert()" << endl;
+    rand_pert();
   }
   return;
 }
@@ -149,8 +177,16 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
    rz[j]=atoms_z[j]-xyz[2];
 
    r[j]=sqrt(pow(rx[j],2)+pow(ry[j],2)+pow(rz[j],2));
+
    if (dxcalc)
    {
+   if (r[j]<zero_tol)
+   {
+    dr_dx[j]=0;
+    dr_dy[j]=0;
+    dr_dz[j]=0;
+    continue;
+   }
    dr_dx[j]=rx[j]/r[j];
    dr_dy[j]=ry[j]/r[j];
    dr_dz[j]=rz[j]/r[j];
@@ -270,10 +306,6 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
    d_activity_dy[j]=C*dP_dy[j]+P*dC_dy[j];
    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
-   //get derivatives with respect of the position of the probe
-   //This assumes that the derivative with respect to the probe
-   //is the negative of the sum of the derivatives with respect
-   //to the atom positions, which I am not yet sure about.
    d_activity_dprobe[0]-=d_activity_dx[j];
    d_activity_dprobe[1]-=d_activity_dy[j];
    d_activity_dprobe[2]-=d_activity_dz[j];
