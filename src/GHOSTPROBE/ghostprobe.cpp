@@ -82,6 +82,7 @@ namespace PLMD
       bool nodxfix;
       bool noupdate;
       double kpert=0;
+      double kxplor=0;
       unsigned pertstride=0;
       bool restart_probes;
       int restart_frame=0;
@@ -182,6 +183,7 @@ namespace PLMD
       keys.add("optional", "PMIN", "");
       keys.add("optional", "DELTAP", "");
       keys.add("optional", "KPERT", "");
+      keys.add("optional", "KXPLOR", "");
       keys.add("optional", "PERTSTRIDE", "Do a full KPERT random perturbation every PERTSTRIDE steps");
       keys.add("optional", "RESTART_FRAME", "");
     }
@@ -356,6 +358,13 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "Perturbations will go in the direction opposite to the derivatives of the activity" << endl;
       cout << "with respect to the probe, when possible. (Fx=-dV/dx)" << endl;
       }
+
+      parse("KXPLOR",kxplor);
+      if (kxplor)
+      {
+      cout << "Perturbations of " << kxplor << " nm will be applied to probes with C equal to 0." << endl;
+      cout << "Those perturbations will go in a random direction." << endl;
+      }
       
       for (unsigned i = 0; i < nprobes; i++)
       {
@@ -364,7 +373,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
                                Rmax, deltaRmax, 
                                Cmin, deltaC, 
                                Pmin, deltaP, 
-                               kpert, pertstride,
+                               kpert, kxplor,pertstride,
                                n_atoms));
         cout << "Probe " << i << " initialised" << endl;
       }

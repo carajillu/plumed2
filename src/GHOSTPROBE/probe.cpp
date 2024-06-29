@@ -21,7 +21,7 @@ Probe::Probe(unsigned Probe_id, bool Restart_probes,
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
             double psimin, double deltapsi, 
-            double kpert, unsigned Pertstride,
+            double kpert, double kxplor, unsigned Pertstride,
             unsigned N_atoms)
 {
   probe_id=Probe_id;
@@ -37,6 +37,7 @@ Probe::Probe(unsigned Probe_id, bool Restart_probes,
   Pmin=psimin; 
   deltaP=deltapsi;
   Kpert=kpert;
+  Kxplor=kxplor;
   pertstride=Pertstride;
 
   //allocate vectors
@@ -102,14 +103,13 @@ void Probe::place_probe(double x, double y, double z)
 
 void Probe::rand_pert()
 {
-  double k=(1-activity);
   double rand_x=COREFUNCTIONS::random_double(-1,1);
   double rand_y=COREFUNCTIONS::random_double(-1,1);
   double rand_z=COREFUNCTIONS::random_double(-1,1);
   double norm=sqrt(pow(rand_x,2)+pow(rand_y,2)+pow(rand_z,2));
-  xyz[0]+=k*Kpert*(rand_x/norm);
-  xyz[1]+=k*Kpert*(rand_y/norm);
-  xyz[2]+=k*Kpert*(rand_z/norm);
+  xyz[0]+=Kxplor*(rand_x/norm);
+  xyz[1]+=Kxplor*(rand_y/norm);
+  xyz[2]+=Kxplor*(rand_z/norm);
   return;
 }
 
@@ -126,9 +126,9 @@ void Probe::bring_to_centroid()
 {
  //cout << "enclosure = " << enclosure << ". Moving probe towards the protein centroid." << endl;
   double norm=sqrt(pow((centroid[0]-xyz[0]),2)+pow((centroid[1]-xyz[1]),2)+pow((centroid[2]-xyz[2]),2));
-  xyz[0]+=Kpert/norm*(centroid[0]-xyz[0]);
-  xyz[1]+=Kpert/norm*(centroid[1]-xyz[1]);
-  xyz[2]+=Kpert/norm*(centroid[2]-xyz[2]);
+  xyz[0]+=Kxplor/norm*(centroid[0]-xyz[0]);
+  xyz[1]+=Kxplor/norm*(centroid[1]-xyz[1]);
+  xyz[2]+=Kxplor/norm*(centroid[2]-xyz[2]);
 }
 
 
@@ -136,32 +136,35 @@ void Probe::perturb_probe(unsigned step)
 {
   if (P==0) //probe is way too far, move it towards the centre of the protein
   { 
+   pertype="centroid";
    bring_to_centroid();
    //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function bring_to_centroid()" << endl;
   }
   else if (pertstride>0 and step%pertstride==0)
   {
    //cout << " Step "<< step << ": calling function rand_pert()" << endl;
-   double act_old=activity;
-   activity=0; //make a full perturbation regardless of activity
+   pertype="random";
    rand_pert();
-   activity=act_old;
   }
   else if (activity==1)
   {
    //cout << " Step "<< step << ": activity = " << activity << ". Doing nothing" << endl;
+   pertype="none";
    return;
   }
   else if (activity>0 and activity<1)
   {
     //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function dx_pert()" << endl;
+    pertype="dx";
     dx_pert();
   }
-  else //activity==0
+  else //C==0
   {
     //cout << " Step "<< step << ": p = " << total_enclosure << " c = " << total_clash << " activity = " << activity << ". Calling function rand_pert()" << endl;
+    pertype="random";
     rand_pert();
   }
+  //cout << pertype << endl;
   return;
 }
 
@@ -419,7 +422,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
   if (step==0)
   {
    wfile.open(filename.c_str());
-   wfile << "ID Step min_r_serial min_r enclosure P clash C activity" << endl;
+   wfile << "ID Step pertype min_r_serial min_r enclosure P clash C activity" << endl;
   }
   else
    wfile.open(filename.c_str(),std::ios_base::app);
@@ -430,7 +433,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
        wfile << step << " " << j << " " << atoms[j].index() << " " << Soff_r[j] << endl;
   }
   */
-  wfile << probe_id << " " << step << " " << atoms[j_min_r].serial() << " " << min_r << " " 
+  wfile << probe_id << " " << step << " " << pertype << " " << atoms[j_min_r].serial() << " " << min_r << " " 
         << total_enclosure << " " << P << " " 
         << total_clash << " " << C << " " 
         << activity << endl;
