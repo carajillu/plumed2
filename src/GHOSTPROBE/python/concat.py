@@ -20,11 +20,15 @@ def concat_xtc(topology,names,outfile):
     traj=mdtraj.load(names[0],top=topology)
     print(names[0],traj)
     for i in range(1,len(names)):
-        traj_i=mdtraj.load(names[i],top=topology)
-        time_offset = traj.time[-1]
-        traj_i.time += time_offset
-        print(names[i],traj_i)
-        traj=mdtraj.join([traj,traj_i])
+        try:
+          traj_i=mdtraj.load(names[i],top=topology)
+          time_offset = traj.time[-1]
+          traj_i.time += time_offset
+          print(names[i],traj_i)
+          traj=mdtraj.join([traj,traj_i])
+        except:
+          print(f"Could not load {names[i]}. Skipping.")
+          continue
     traj.save_xtc(outfile)
     print(traj)
     return
@@ -35,14 +39,22 @@ def concat_xyz(names,outfile):
     os.system(cmd)
     for i in range(1,len(names)):
         cmd=f"cat {names[i]} >> {outfile}"
-        os.system(cmd)
+        try:
+           os.system(cmd)
+        except:
+           print(f"Could not concatenate {names[i]}. Skipping.")
+           continue
     return
 
 def concat_df(names,outfile):
     df=pd.read_csv(names[0],sep=" ")
     for i in range(1,len(names)):
-        df_i=pd.read_csv(names[i],sep=" ")
-        df=pd.concat([df,df_i],ignore_index=True)
+        try:
+           df_i=pd.read_csv(names[i],sep=" ")
+           df=pd.concat([df,df_i],ignore_index=True)
+        except:
+            print(f"Could not concatenate {names[i]}. Skipping.")
+            continue
     df.to_csv(outfile,sep=" ", index=False)
     return df
           
