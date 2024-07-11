@@ -3,6 +3,9 @@ import mdtraj
 import os
 import sys
 import subprocess
+import numpy as np
+import pymp
+import pandas as pd
 
 def parse():
     parser = argparse.ArgumentParser()
@@ -11,21 +14,58 @@ def parse():
     parser.add_argument('-es','--equilibrium_scores', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium_scores.pdb")
     parser.add_argument('-b','--trj_bias_path', nargs="+", help="Biased MD trajectory file(s) for mdtraj",default=["biased.xtc"])
     parser.add_argument('-o','--output', nargs="?", help="Output PDB file with the cryproscore of each atom as B-factor",default="crypto.pdb")
+    parser.add_argument('--r_min', type=float, help="Minimum distance for S_off function (in ANGSTROM!)",default=3.076)
+    parser.add_argument('--delta_r', type=float, help="Distance over which S_off turns off (in ANGSTROM!)",default=0.564)
+    parser.add_argument('--drug_min', type=float, help="Minimim druggability score to include a pocket in the analysis",default=0.1)
     args = parser.parse_args()
     return args
 
-def run_fpocket(trj):
+def S_off(r,r_min,delta_r):
+    m=(r-r_min)/delta_r
+    if m<0:
+        return 1
+    elif m>1:
+        return 0
+    else:
+        return 3*(m-1)**4+2*(m-1)**6
+    
+def get_druggable_pockets(info,dmin):
+    druggable_pockets=[]
+    with open(info) as filein:
+        pocket_id=0 # there's no pocket 0 in fpocket output
+        drugscore=0
+        for line in filein:
+            if line.startswith("Pocket"):
+                pocket_id=int(line.split()[1])
+            elif "Druggability Score" in line:
+                drugscore=float(line.split()[3])
+                if drugscore>dmin:
+                    druggable_pockets.append(pocket_id)
+    return druggable_pockets
+
+def run_fpocket(trj,dmin):
     # Run fpocket on the trajectory
     out_list=[]
     for i in range(0,len(trj)):
-        frame_pdb=f"frame_{i}.pdb"
-        trj[i].save_pdb(frame_pdb)
-        try:
-            cmd = f"fpocket -f {frame_pdb}"
-            subprocess.run(cmd, shell=True, check=True)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Error running fpocket: {e}")
-        out_file=f"frame_{i}_out/frame_{i}_out.pdb"
+        frame_name=f"frame_{i}"
+        frame_pdb=f"{frame_name}.pdb"
+        out_dir=f"{frame_name}_out"
+        out_info=f"{out_dir}/{frame_name}_info.txt"
+        out_file=f"{out_dir}/{frame_name}_drug.pdb"
+        if not os.path.isfile(out_file):
+               trj[i].save_pdb(frame_pdb)
+               try:
+                  cmd = f"fpocket -f {frame_pdb}"
+                  subprocess.run(cmd, shell=True, check=True)
+               except subprocess.CalledProcessError as e:
+                  raise RuntimeError(f"Error running fpocket: {e}")
+               druggable_pockets=get_druggable_pockets(out_info,dmin)
+               cmd=f"grep ATOM {frame_pdb} >>    {out_file}"
+               subprocess.run(cmd, shell=True, check=True)
+               for pocket_id in druggable_pockets:
+                   pocket_name=f"{out_dir}/pockets/pocket{str(pocket_id)}_vert.pqr"
+                   cmd=f"grep ATOM {pocket_name} >> {out_file}"
+                   subprocess.run(cmd, shell=True, check=True)
         if os.path.isfile(out_file):
            out_list.append(out_file)
         else:
@@ -33,26 +73,31 @@ def run_fpocket(trj):
             sys.exit()
     return out_list
 
-def get_scores(pdb):
-    scores=[]
-    with open(pdb) as f:
-        for line in f:
-            if "ATOM" in line:
-                line=line.split()
-                scores.append(float(line[10])) # B-factor is the 11th column
-            if "HETATM" in line:
-                break
+def get_scores(pdb,r_min,delta_r):
+    struct_obj=mdtraj.load(pdb)
+    stp_idx=struct_obj.top.select("resname STP")
+    protein_idx=struct_obj.top.select("protein")
+    scores=[0]*len(protein_idx)
+    crd=struct_obj.xyz[0]
+    
+    with pymp.Parallel() as p:
+        for i in p.range(len(protein_idx)):
+            score_i=0
+            for j in range(len(stp_idx)):
+                r=np.linalg.norm(crd[protein_idx[i]]-crd[stp_idx[j]])
+                score_i+=S_off(r,r_min,delta_r)
+            scores[i]=score_i
     return scores
 
 
-def calc_pocketscores(pdb_list,ref_structure):
+def calc_pocketscores(pdb_list,ref_structure,r_min,delta_r):
     n_atoms=ref_structure.n_atoms
     n_frames=len(pdb_list)
     pocketscores=[0]*n_atoms
     for pdb in pdb_list:
-        pocketscores_pdb=get_scores(pdb)
+        pocketscores_pdb=get_scores(pdb,r_min,delta_r)
         for i in range(0,n_atoms):
-            pocketscores[i]+=pocketscores_pdb[i]/n_frames
+            pocketscores[i]+=pocketscores_pdb[i]/(n_frames*100) # to keep within b-factor range
     return pocketscores
                     
 def calc_cryptoscores(pocketscores_eq,pocketscores_bias):
@@ -61,31 +106,43 @@ def calc_cryptoscores(pocketscores_eq,pocketscores_bias):
         cryptoscores.append(pocketscores_bias[i]-pocketscores_eq[i])
     return cryptoscores
 
-def output_score_pdb(ref_obj,cryptoscores,out_pdb):
-    for residue in ref_obj.top.residues:
-        resid_score=0
-        ca_idx=None
-        for atom in residue.atoms:
-            if atom.name=="CA":
-                ca_idx=atom.index
-            resid_score+=cryptoscores[atom.index]/residue.n_atoms
-        if ca_idx is not None:
-           cryptoscores[ca_idx]=resid_score
-    ref_obj.save_pdb(out_pdb,bfactors=cryptoscores)
+def output_score_pdb(ref_obj,scores,out_pdb):
+    ref_obj.save_pdb(out_pdb,bfactors=scores)
     return
+
+def mdtraj_get_atoms(trj_obj):
+    atomnames=[]
+    for atom in trj_obj.topology.atoms:
+        atomnames.append(atom)
+    return atomnames
+
+def mdtraj_get_residues(trj_obj):
+    residnames=[]
+    for atom in trj_obj.topology.atoms:
+        residnames.append(atom.residue)
+    return residnames
 
 if __name__=="__main__":
     root_dir=os.getcwd()
     args=parse()
     ref_obj=mdtraj.load(args.topology)
+
+    z=pd.DataFrame()
+    z["atom"]=mdtraj_get_atoms(ref_obj)
+    z["residue"]=mdtraj_get_residues(ref_obj)
+
     if os.path.isfile(args.equilibrium_scores):
         pocketscores_eq=get_scores(args.equilibrium_scores)
     else:
         eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
-        os.mkdir("equilibrium")
+        os.makedirs("equilibrium",exist_ok=True)
         os.chdir("equilibrium")
-        fpocketlist_eq=run_fpocket(eq_trj)
-        pocketscores_eq=calc_pocketscores(fpocketlist_eq,ref_obj)
+        os.makedirs("fpocket",exist_ok=True)
+        os.chdir("fpocket")
+        fpocketlist_eq=run_fpocket(eq_trj,args.drug_min)
+        pocketscores_eq=calc_pocketscores(fpocketlist_eq,ref_obj,args.r_min,args.delta_r)
+        z["equilibrium"]=pocketscores_eq
+        os.chdir("..")
         outname=args.equilibrium_scores
         output_score_pdb(ref_obj,pocketscores_eq,args.equilibrium_scores)
         os.chdir(root_dir)
@@ -94,16 +151,22 @@ if __name__=="__main__":
         print(bias_path)
         bias_obj=mdtraj.load(bias_path,top=args.topology)
         dirname=bias_path.split(".")[0]
-        os.mkdir(dirname)
+        os.makedirs(dirname,exist_ok=True)
         os.chdir(dirname)
-        fpocketlist=run_fpocket(bias_obj)
-        pocketscores_bias=calc_pocketscores(fpocketlist,ref_obj)
+        os.makedirs("fpocket",exist_ok=True)
+        os.chdir("fpocket")
+        fpocketlist=run_fpocket(bias_obj,args.drug_min)
+        pocketscores_bias=calc_pocketscores(fpocketlist,ref_obj,args.r_min,args.delta_r)
+        z[bias_path]=pocketscores_bias
+        os.chdir("..")
         outname=dirname+"_pocketscores.pdb"
         output_score_pdb(ref_obj,pocketscores_bias,outname)
         cryptoscores=calc_cryptoscores(pocketscores_eq,pocketscores_bias)
         outname=dirname+"_crypto.pdb"
         output_score_pdb(ref_obj,cryptoscores,outname)
         os.chdir(root_dir)
+    
+    z.to_csv("crypto_scores.csv",index=False)
     
     
     
