@@ -9,6 +9,7 @@ import pandas as pd
 
 def parse():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
     parser.add_argument('-f','--topology', nargs="?", help="Topology file for mdtraj",default="protein.pdb")
     parser.add_argument('-e','--trj_eq_path', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium.xtc")
     parser.add_argument('-es','--equilibrium_scores', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium_scores.pdb")
@@ -86,7 +87,8 @@ def get_scores(pdb,r_min,delta_r):
             for j in range(len(stp_idx)):
                 r=np.linalg.norm(crd[protein_idx[i]]-crd[stp_idx[j]])
                 score_i+=S_off(r,r_min,delta_r)
-            scores[i]=score_i
+            with p.lock:
+                scores[i]=score_i
     return scores
 
 
@@ -134,7 +136,10 @@ if __name__=="__main__":
     if os.path.isfile(args.equilibrium_scores):
         pocketscores_eq=get_scores(args.equilibrium_scores)
     else:
-        eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
+        if args.debug:
+           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:1]
+        else:
+           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
         os.makedirs("equilibrium",exist_ok=True)
         os.chdir("equilibrium")
         os.makedirs("fpocket",exist_ok=True)
@@ -149,7 +154,10 @@ if __name__=="__main__":
     
     for bias_path in args.trj_bias_path:
         print(bias_path)
-        bias_obj=mdtraj.load(bias_path,top=args.topology)
+        if args.debug:
+           bias_obj=mdtraj.load(bias_path,top=args.topology)[0:1]
+        else:
+           bias_obj=mdtraj.load(bias_path,top=args.topology)
         dirname=bias_path.split(".")[0]
         os.makedirs(dirname,exist_ok=True)
         os.chdir(dirname)
