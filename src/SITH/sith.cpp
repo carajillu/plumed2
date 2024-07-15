@@ -19,12 +19,13 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
-#include "Bias.h"
-#include "ActionRegister.h"
+#include "bias/Bias.h"
+#include "core/ActionRegister.h"
 #include "core/ActionSet.h"
 #include "tools/Grid.h"
 #include "core/PlumedMain.h"
-#include "core/Atoms.h"
+//#include "core/Atoms.h"
+#include "tools/Communicator.h"
 #include "tools/Exception.h"
 #include "core/FlexibleBin.h"
 #include "tools/Matrix.h"
@@ -86,7 +87,6 @@ void SITH::registerKeywords(Keywords &keys)
   keys.add("compulsory", "DIST", "Distance in CV space to generate a new hyperbin");
   keys.add("compulsory", "KAPPA_FACTOR", "Factor that multiplies the population of the bins");
   keys.addFlag("WALKERS_MPI", false, "Switch on MPI version (only version available) of multiple walkers");
-  componentsAreNotOptional(keys);
   keys.addOutputComponent("bias", "default", "the instantaneous value of the bias potential");
   keys.addOutputComponent("force2", "default", "the instantaneous value of the squared force due to this bias potential");
 }
