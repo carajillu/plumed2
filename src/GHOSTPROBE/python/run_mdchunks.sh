@@ -1,5 +1,5 @@
-start=1
-end=20
+start=$1
+end=$2
 plumed_srcdir=/home/joan/github/plumed2_carajillu/
 backupdir=/home/joan/MD/GHOSTPROBE/TEM1/1JWP/backup
 rootdir=$(pwd)
