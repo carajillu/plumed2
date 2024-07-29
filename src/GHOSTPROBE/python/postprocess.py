@@ -12,7 +12,7 @@ def parse():
     parser.add_argument('-z','--stride', nargs="?", type=int,help="Load 1 in n frames",default=1)
     parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes",default=1)
     parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein_probes")
-    parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMS style selection)",default="all")
+    parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMD style selection)",default="all")
     parser.add_argument('-a','--actmin', nargs="?", type=float, help="Minimum activity to print in the aligned pdb",default=1)
     parser.add_argument('-ts','--timestep', nargs="?", type=float, help="Time step for input trajectory (ps)",default=50)
     parser.add_argument('-b','--time_begin', nargs="?", type=float, help="Time to begin postprocessing (ps)",default=0)
@@ -127,7 +127,7 @@ if __name__=="__main__":
         #print(frame_begin,frame_end,args.stride)
         traj_obj=traj_obj[frame_begin:frame_end+1:args.stride]
 
-    print(traj_obj)    
+    print(traj_obj)
     
     if (args.input_xyz is not None):
        atomlist, xyz_prot=process_xyz(args.input_xyz,args.stride,frame_begin,frame_end)
