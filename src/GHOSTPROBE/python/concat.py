@@ -6,6 +6,7 @@ import argparse
 import glob
 def parse():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--noplumed', action=argparse.BooleanOptionalAction)
     parser.add_argument('-p','--top', nargs="?", help="Topology file for mdtraj",default="prod_0/prod.gro")
     parser.add_argument('-t','--xtc', nargs="?", help="Name of the RAW Gromacs trajectory files (must be the same in all directories)",default="prod.xtc")
     parser.add_argument('-a','--pattern', nargs="?", help="pattern matching the directory names. Simulation index (starting at 0) will be appended at the end.",default="prod_")
@@ -96,6 +97,8 @@ if __name__=="__main__":
         ref_obj=mdtraj.load(xtc_lst[0],top=args.top)[0]
     xtc=concat_xtc(topology=args.top,names=xtc_lst,ref_obj=ref_obj,align_sel=args.ref_selection,output_sel=args.out_selection,outfile="concat/"+args.xtc)
     
+    if args.noplumed:
+        sys.exit("The --noplumed flag has been passed. Will not process probes and protein files. Exiting.")
     
     protein_lst=[]
     for i in range(0,args.nsim):
