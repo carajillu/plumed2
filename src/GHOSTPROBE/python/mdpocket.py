@@ -52,7 +52,7 @@ def run_mdpocket(top_str,trj_str,pocket_str):
                   "--selected_pocket",pocket_str]
     subprocess.run(mdpocket_cmd)
     
-    sed_cmd=["sed", "'s/  */ /g'", "-i", "mdpout_descriptors.txt"]
+    sed_cmd = ["sed", "-i", "s/  */ /g", "mdpout_descriptors.txt"]
     subprocess.run(sed_cmd)
 
     return
