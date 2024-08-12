@@ -46,32 +46,45 @@ def get_druggable_pockets(info,dmin):
 
 def run_fpocket(trj,dmin):
     # Run fpocket on the trajectory
+    # out_list = pymp.shared.array((len(trj),), dtype='str') # this returns an error
     out_list=[]
-    for i in range(0,len(trj)):
-        frame_name=f"frame_{i}"
-        frame_pdb=f"{frame_name}.pdb"
-        out_dir=f"{frame_name}_out"
-        out_info=f"{out_dir}/{frame_name}_info.txt"
-        out_file=f"{out_dir}/{frame_name}_drug.pdb"
-        if not os.path.isfile(out_file):
-               trj[i].save_pdb(frame_pdb)
-               try:
-                  cmd = f"fpocket -f {frame_pdb}"
-                  subprocess.run(cmd, shell=True, check=True)
-               except subprocess.CalledProcessError as e:
-                  raise RuntimeError(f"Error running fpocket: {e}")
-               druggable_pockets=get_druggable_pockets(out_info,dmin)
-               cmd=f"grep ATOM {frame_pdb} >>    {out_file}"
-               subprocess.run(cmd, shell=True, check=True)
-               for pocket_id in druggable_pockets:
-                   pocket_name=f"{out_dir}/pockets/pocket{str(pocket_id)}_vert.pqr"
-                   cmd=f"grep ATOM {pocket_name} >> {out_file}"
-                   subprocess.run(cmd, shell=True, check=True)
-        if os.path.isfile(out_file):
-           out_list.append(out_file)
-        else:
+
+    with pymp.Parallel() as p:
+        for i in p.range(len(trj)):
+            frame_name=f"frame_{i}"
+            frame_pdb=f"{frame_name}.pdb"
+            out_dir=f"{frame_name}_out"
+            out_info=f"{out_dir}/{frame_name}_info.txt"
+            out_file=f"{out_dir}/{frame_name}_drug.pdb"
+            if not os.path.isfile(out_file):
+                trj[i].save_pdb(frame_pdb)
+                try:
+                    print(f"Running fpocket on {frame_pdb} on thread {p.thread_num}")
+                    cmd = f"fpocket -f {frame_pdb}"
+                    subprocess.run(cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    raise RuntimeError(f"Error running fpocket: {e}")
+                druggable_pockets=get_druggable_pockets(out_info,dmin)
+                cmd=f"grep ATOM {frame_pdb} >> {out_file}"
+                subprocess.run(cmd, shell=True, check=True)
+                for pocket_id in druggable_pockets:
+                    pocket_name=f"{out_dir}/pockets/pocket{str(pocket_id)}_vert.pqr"
+                    cmd=f"grep ATOM {pocket_name} >> {out_file}"
+                    subprocess.run(cmd, shell=True, check=True)
+
+    # This could be part of the earlier loop, but I can't create a shared array of type str
+    for i in range(len(trj)):
+          frame_name=f"frame_{i}"
+          frame_pdb=f"{frame_name}.pdb"
+          out_dir=f"{frame_name}_out"
+          out_info=f"{out_dir}/{frame_name}_info.txt"
+          out_file=f"{out_dir}/{frame_name}_drug.pdb"  
+          if os.path.isfile(out_file):
+            out_list.append(out_file)
+          else:
             print(f"Could not find {out_file}. Check filename in code.")
             sys.exit()
+    
     return out_list
 
 def get_scores(pdb,r_min,delta_r):
@@ -173,7 +186,7 @@ if __name__=="__main__":
         output_score_pdb(bias_obj[0],cryptoscores,outname)
         os.chdir(root_dir)
     
-    z.to_csv("crypto_scores.csv",index=False)
+    z.to_csv("pocket_scores.csv",index=False)
     
     
     
