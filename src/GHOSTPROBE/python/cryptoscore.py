@@ -40,7 +40,7 @@ def get_druggable_pockets(info,dmin):
                 pocket_id=int(line.split()[1])
             elif "Druggability Score" in line:
                 drugscore=float(line.split()[3])
-                if drugscore>dmin:
+                if drugscore>=dmin:
                     druggable_pockets.append(pocket_id)
     return druggable_pockets
 
@@ -78,7 +78,7 @@ def get_scores(pdb,r_min,delta_r):
     struct_obj=mdtraj.load(pdb)
     stp_idx=struct_obj.top.select("resname STP")
     protein_idx=struct_obj.top.select("protein")
-    scores=[0]*len(protein_idx)
+    scores = pymp.shared.array((len(protein_idx),), dtype='float64')
     crd=struct_obj.xyz[0]
     
     with pymp.Parallel() as p:
@@ -87,8 +87,7 @@ def get_scores(pdb,r_min,delta_r):
             for j in range(len(stp_idx)):
                 r=np.linalg.norm(crd[protein_idx[i]]-crd[stp_idx[j]])
                 score_i+=S_off(r,r_min,delta_r)
-            with p.lock:
-                scores[i]=score_i
+            scores[i]=score_i
     return scores
 
 
@@ -108,8 +107,8 @@ def calc_cryptoscores(pocketscores_eq,pocketscores_bias):
         cryptoscores.append(pocketscores_bias[i]-pocketscores_eq[i])
     return cryptoscores
 
-def output_score_pdb(ref_obj,scores,out_pdb):
-    ref_obj.save_pdb(out_pdb,bfactors=scores)
+def output_score_pdb(trj_obj,scores,out_pdb):
+    trj_obj.save_pdb(out_pdb,bfactors=scores)
     return
 
 def mdtraj_get_atoms(trj_obj):
@@ -137,7 +136,7 @@ if __name__=="__main__":
         pocketscores_eq=get_scores(args.equilibrium_scores)
     else:
         if args.debug:
-           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:1]
+           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:2]
         else:
            eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
         os.makedirs("equilibrium",exist_ok=True)
@@ -149,13 +148,13 @@ if __name__=="__main__":
         z["equilibrium"]=pocketscores_eq
         os.chdir("..")
         outname=args.equilibrium_scores
-        output_score_pdb(ref_obj,pocketscores_eq,args.equilibrium_scores)
+        output_score_pdb(ref_obj[0],pocketscores_eq,args.equilibrium_scores)
         os.chdir(root_dir)
     
     for bias_path in args.trj_bias_path:
         print(bias_path)
         if args.debug:
-           bias_obj=mdtraj.load(bias_path,top=args.topology)[0:1]
+           bias_obj=mdtraj.load(bias_path,top=args.topology)[0:2]
         else:
            bias_obj=mdtraj.load(bias_path,top=args.topology)
         dirname=bias_path.split(".")[0]
@@ -168,10 +167,10 @@ if __name__=="__main__":
         z[bias_path]=pocketscores_bias
         os.chdir("..")
         outname=dirname+"_pocketscores.pdb"
-        output_score_pdb(ref_obj,pocketscores_bias,outname)
+        output_score_pdb(bias_obj[0],pocketscores_bias,outname)
         cryptoscores=calc_cryptoscores(pocketscores_eq,pocketscores_bias)
         outname=dirname+"_crypto.pdb"
-        output_score_pdb(ref_obj,cryptoscores,outname)
+        output_score_pdb(bias_obj[0],cryptoscores,outname)
         os.chdir(root_dir)
     
     z.to_csv("crypto_scores.csv",index=False)
