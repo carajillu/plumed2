@@ -6,17 +6,19 @@ import sys
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format",default="traj.gro")
-    parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format",default="traj.xtc")
-    parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed",default=None)
-    parser.add_argument('-z','--stride', nargs="?", type=int,help="Load 1 in n frames",default=1)
-    parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes",default=1)
-    parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format",default="protein_probes")
-    parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMD style selection)",default="all")
-    parser.add_argument('-a','--actmin', nargs="?", type=float, help="Minimum activity to print in the aligned pdb",default=1)
-    parser.add_argument('-ts','--timestep', nargs="?", type=float, help="Time step for input trajectory (ps)",default=50)
-    parser.add_argument('-b','--time_begin', nargs="?", type=float, help="Time to begin postprocessing (ps)",default=0)
-    parser.add_argument('-e','--time_end', nargs="?", type=float, help="Time to end postprocessing",default=np.inf)
+    parser.add_argument('-i','--input_gro', nargs="?", help="GMX structure in gro or pdb format (default: traj.gro)",default="traj.gro")
+    parser.add_argument('-t','--input_traj', nargs="?", help="GMX trajectory in xtc or trr format (default: traj.xtc)",default="traj.xtc")
+    parser.add_argument('-r','--reference', nargs="?", help="Reference structure to align all frames to (default: ref.pdb)",default="ref.pdb")
+    parser.add_argument('-rs','--ref_selection', nargs="?", help="VMD style selection for alignment to reference (default: backbone)",default="backbone")
+    parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed (default: None)",default=None)
+    parser.add_argument('-z','--stride', nargs="?", type=int,help="Load 1 in n frames (default: 1)",default=1)
+    parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes (default: 1)",default=1)
+    parser.add_argument('-o','--output', nargs="?", help="Protein output in pdb format (default: protein_probes)",default="protein_probes")
+    parser.add_argument('-s','--subset', nargs="?", help="subset of atoms for when protein.xyz is not supplied (VMD style selection) (default: all)",default="all")
+    parser.add_argument('-a','--actmin', nargs="?", type=float, help="Minimum activity to print in the aligned pdb (default: 1)",default=1)
+    parser.add_argument('-ts','--timestep', nargs="?", type=float, help="Time step for input trajectory (ps) (default: 50)",default=50)
+    parser.add_argument('-b','--time_begin', nargs="?", type=float, help="Time to begin postprocessing (ps) (default: 0)",default=0)
+    parser.add_argument('-e','--time_end', nargs="?", type=float, help="Time to end postprocessing (default: inf)",default=np.inf)
 
     args = parser.parse_args()
     return args
@@ -150,9 +152,11 @@ if __name__=="__main__":
             trj=mktraj(xyz_probe,i)
             probes_trj.append(trj)
     
-    #join protein and probes in traj
+    #join protein and probes in traj and align them to reference
     newtraj=stack_traj(subset,probes_trj)
-    newtraj=newtraj.superpose(reference=newtraj[0],atom_indices=newtraj.topology.select("backbone"))
+    ref_obj=mdtraj.load(args.reference).atom_slice(atomlist)
+    selection=ref_obj.topology.select(args.ref_selection)
+    newtraj=newtraj.superpose(reference=ref_obj,atom_indices=selection,ref_atom_indices=selection)
     #export
     try:
        newtraj[0].save_gro(args.output+".gro")
