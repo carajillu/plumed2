@@ -10,13 +10,14 @@ import pandas as pd
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
+    parser.add_argument('--cleanup', action=argparse.BooleanOptionalAction,help="Remove fpocket output files after processing")
     parser.add_argument('-f','--topology', nargs="?", help="Topology file for mdtraj",default="protein.pdb")
     parser.add_argument('-e','--trj_eq_path', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium.xtc")
     parser.add_argument('-es','--equilibrium_scores', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium_scores.pdb")
     parser.add_argument('-b','--trj_bias_path', nargs="+", help="Biased MD trajectory file(s) for mdtraj",default=["biased.xtc"])
     parser.add_argument('-o','--output', nargs="?", help="Output PDB file with the cryproscore of each atom as B-factor",default="crypto.pdb")
-    parser.add_argument('--r_min', type=float, help="Minimum distance for S_off function (in ANGSTROM!)",default=3.076)
-    parser.add_argument('--delta_r', type=float, help="Distance over which S_off turns off (in ANGSTROM!)",default=0.564)
+    parser.add_argument('--r_min', type=float, help="Minimum distance for S_off function",default=0.3076)
+    parser.add_argument('--delta_r', type=float, help="Distance over which S_off turns off",default=0.0564)
     parser.add_argument('--drug_min', type=float, help="Minimim druggability score to include a pocket in the analysis",default=0.1)
     args = parser.parse_args()
     return args
@@ -136,6 +137,20 @@ def mdtraj_get_residues(trj_obj):
         residnames.append(atom.residue)
     return residnames
 
+def pocketscores_byres(z):
+    resnames=z["residue"].unique()
+    res_scores=pd.DataFrame()
+    res_scores["residue"]=resnames
+    res_scores["equilibrium"]=0
+    for bias in z.columns[2:]:
+        res_scores[bias]=0
+    for res in resnames:
+        res_scores.loc[res_scores["residue"]==res,"equilibrium"]=sum(z.loc[z["residue"]==res,"equilibrium"])
+        for bias in z.columns[2:]:
+            res_scores.loc[res_scores["residue"]==res,bias]=sum(z.loc[z["residue"]==res,bias])
+    return res_scores
+
+
 if __name__=="__main__":
     root_dir=os.getcwd()
     args=parse()
@@ -149,7 +164,7 @@ if __name__=="__main__":
         pocketscores_eq=get_scores(args.equilibrium_scores)
     else:
         if args.debug:
-           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:2]
+           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:1]
         else:
            eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
         os.makedirs("equilibrium",exist_ok=True)
@@ -167,7 +182,7 @@ if __name__=="__main__":
     for bias_path in args.trj_bias_path:
         print(bias_path)
         if args.debug:
-           bias_obj=mdtraj.load(bias_path,top=args.topology)[0:2]
+           bias_obj=mdtraj.load(bias_path,top=args.topology)[0:1]
         else:
            bias_obj=mdtraj.load(bias_path,top=args.topology)
         dirname=bias_path.split(".")[0]
@@ -176,7 +191,7 @@ if __name__=="__main__":
         os.makedirs("fpocket",exist_ok=True)
         os.chdir("fpocket")
         fpocketlist=run_fpocket(bias_obj,args.drug_min)
-        pocketscores_bias=calc_pocketscores(fpocketlist,ref_obj,args.r_min,args.delta_r)
+        pocketscores_bias=calc_pocketscores(fpocketlist,bias_obj,args.r_min,args.delta_r)
         z[bias_path]=pocketscores_bias
         os.chdir("..")
         outname=dirname+"_pocketscores.pdb"
@@ -186,7 +201,9 @@ if __name__=="__main__":
         output_score_pdb(bias_obj[0],cryptoscores,outname)
         os.chdir(root_dir)
     
-    z.to_csv("pocket_scores.csv",index=False)
+    z.to_csv("atom_scores.csv",index=False)
+    z=pocketscores_byres(z)
+    z.to_csv("resid_scores.csv",index=False)
     
     
     
