@@ -23,47 +23,77 @@ def parse():
     args = parser.parse_args()
     return args
 
-def process_xyz(input_xyz,stride,frame_begin,frame_end):
-    filein=open(input_xyz)
-    line_id=0
-    atom_id=0
-    frame_id=0
-    atomlist=[]
-    crd_frame=[]
-    crd=[]
-    for line in filein:
-        if (line_id==0):
-            #print(f"starting frame {frame_id}")
-            n_atoms=int(line)
-        elif (line_id%(n_atoms+2)==0):
-            frame_id=frame_id+1
-            #print(f"starting frame {frame_id}") 
-        elif (line_id%(n_atoms+2)==1):
-            #print(f"This is the comment line in frame {frame_id}")
-            pass
-        else:
-            #print(f"This atom {atom_id} of frame {frame_id}")
-            line=line.split()
-            if (len(atomlist)<n_atoms):
-                try:
-                   atomlist.append(int(line[0])-1)
-                except:
-                   pass
-            crd_frame.append([float(line[1])/10,float(line[2])/10,float(line[3])/10])
-            atom_id=atom_id+1
-            if (line_id%(n_atoms+2)==(n_atoms+1)):
-                #print(f"This was the last atom in frame {frame_id}.")
-                if ((frame_id>=frame_begin) and (frame_id%stride==0)):
-                    #print(f"appending frame {frame_id}")
-                    crd.append(crd_frame)
-                if (frame_id==frame_end):
-                    #print("This was the last requested frame")
-                    break
-                crd_frame=[]
-                atom_id=0
-        line_id=line_id+1
-    #sys.exit()      
-    return atomlist,crd
+def process_xyz(input_xyz, stride, frame_begin, frame_end):
+    print(f"Processing file: {input_xyz}")
+    
+    try:
+        with open(input_xyz) as filein:
+            line_id = 0
+            atom_id = 0
+            frame_id = 0
+            atomlist = []
+            crd_frame = []
+            crd = []
+            n_atoms = 0  # Initialize n_atoms to handle cases where the file might be empty or incorrect
+
+            for line in filein:
+                line = line.strip()  # Remove leading/trailing whitespace
+
+                # Determine the number of atoms from the first line of each frame
+                if line_id == 0 or (line_id % (n_atoms + 2) == 0):
+                    try:
+                        n_atoms = int(line)
+                        frame_id += 1
+                        #print(f"Starting frame {frame_id}")
+                    except ValueError:
+                        raise ValueError(f"Expected an integer for the number of atoms at line {line_id}, got '{line}'")
+                
+                # Skip the comment line (2nd line in each frame)
+                elif line_id % (n_atoms + 2) == 1:
+                    pass
+                
+                # Process atom data
+                else:
+                    line_split = line.split()
+                    if len(line_split) < 4:
+                        raise ValueError(f"Invalid atom line format at line {line_id}: '{line}'")
+
+                    if len(atomlist) < n_atoms:
+                        try:
+                            atomlist.append(int(line_split[0]) - 1)
+                        except ValueError: # Skip the atom ID if it's not an integer
+                            pass
+
+                    try:
+                        crd_frame.append([
+                            float(line_split[1]) / 10,
+                            float(line_split[2]) / 10,
+                            float(line_split[3]) / 10
+                        ])
+                    except ValueError:
+                        raise ValueError(f"Invalid coordinate data at line {line_id}: '{line}'")
+
+                    atom_id += 1
+
+                    # End of frame, check if we need to store the frame
+                    if line_id % (n_atoms + 2) == n_atoms + 1:
+                        if frame_begin <= frame_id <= frame_end and (frame_id - frame_begin) % stride == 0:
+                            crd.append(crd_frame)
+                        if frame_id == frame_end:
+                            break
+                        crd_frame = []
+                        atom_id = 0
+
+                line_id += 1
+
+            return atomlist, crd
+
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File '{input_xyz}' not found.")
+
+    except Exception as e:
+        raise Exception(f"Unexpected error: {e}")
+
 
 def mktraj(xyz,id):
     top=mdtraj.Topology()
@@ -132,7 +162,7 @@ if __name__=="__main__":
     print(traj_obj)
     
     if (args.input_xyz is not None):
-       atomlist, xyz_prot=process_xyz(args.input_xyz,args.stride,frame_begin,frame_end)
+       atomlist, xyz_prot=process_xyz(args.input_xyz,args.stride,frame_begin,frame_end+1)
        subset=traj_obj.atom_slice(atomlist)
        subset.xyz=xyz_prot
     else:
