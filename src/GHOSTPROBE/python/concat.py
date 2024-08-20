@@ -16,16 +16,21 @@ def parse():
     parser.add_argument('-b', '--nsim', nargs="?", type=int, help="Number of simulations sto concatenate (MUST start at 0, be consecutive and follow a pattern)",default=1)
     parser.add_argument('-x','--input_xyz', nargs="?", help="protein file issued by plumed (must be the same in all directories)",default="protein.xyz")
     parser.add_argument('-n','--nprobes', nargs="?", type=int, help="Number of probes (must be the same in all directories)",default=1)
+    parser.add_argument('--stripwaters', action=argparse.BooleanOptionalAction)
     args = parser.parse_args()
     return args
 
-def concat_xtc(topology,names,ref_obj,align_sel,output_sel,outfile):
+def concat_xtc(topology,names,ref_obj,align_sel,output_sel,outfile,stripwaters=False):
     traj=mdtraj.load(names[0],top=topology)
+    if stripwaters:
+        traj=traj.remove_solvent()
     selection=get_selection(ref_obj,traj,align_sel)
     print(names[0],traj)
     for i in range(1,len(names)):
         try:
-          traj_i=mdtraj.load(names[i],top=topology)
+          traj_i=mdtraj.load(names[i],top=topology)[1:]
+          if stripwaters:
+            traj_i=traj_i.remove_solvent()
           time_offset = traj.time[-1]
           traj_i.time += time_offset
           print(names[i],traj_i)
@@ -33,7 +38,8 @@ def concat_xtc(topology,names,ref_obj,align_sel,output_sel,outfile):
         except:
           print(f"Could not load {names[i]}. Skipping.")
           continue
-    traj.image_molecules(inplace=True)
+    anchor_molecules=[set(traj.topology.residue(0).atoms)]
+    traj.image_molecules(inplace=True,anchor_molecules=anchor_molecules)
     traj.superpose(reference=ref_obj[0],atom_indices=selection,ref_atom_indices=selection)
     traj=traj.atom_slice(traj.topology.select(output_sel))
     traj.save_xtc(outfile)
@@ -95,7 +101,7 @@ if __name__=="__main__":
         ref_obj=mdtraj.load(args.reference)[0]
     else:
         ref_obj=mdtraj.load(xtc_lst[0],top=args.top)[0]
-    xtc=concat_xtc(topology=args.top,names=xtc_lst,ref_obj=ref_obj,align_sel=args.ref_selection,output_sel=args.out_selection,outfile="concat/"+args.xtc)
+    xtc=concat_xtc(topology=args.top,names=xtc_lst,ref_obj=ref_obj,align_sel=args.ref_selection,output_sel=args.out_selection,outfile="concat/"+args.xtc,stripwaters=args.stripwaters)
     
     if args.noplumed:
         sys.exit("The --noplumed flag has been passed. Will not process probes and protein files. Exiting.")
