@@ -48,11 +48,14 @@ def concat_xtc(topology,names,ref_obj,align_sel,output_sel,outfile,stripwaters=F
     return
 
 
-def concat_xyz(names,outfile):
+def concat_xyz(names,outfile,n_atoms=1):
+    with open(names[0],"r") as f:
+        n_atoms=int(f.readline())
     cmd=f"cat {names[0]} > {outfile}"
     os.system(cmd)
     for i in range(1,len(names)):
-        cmd=f"cat {names[i]} >> {outfile}"
+        #cmd=f"cat {names[i]} >> {outfile}"
+        cmd=f"tail -n +{n_atoms+3} {names[i]} >> {outfile}"
         try:
            os.system(cmd)
         except:
