@@ -98,7 +98,9 @@ namespace PLMD
 
       // Set up of CV
       vector<PLMD::AtomNumber> atoms; // indices of atoms supplied to the CV (starts at 1)
+      vector<PLMD::AtomNumber> dxclude; // indices of atoms that will experience the GHOSTPROBE force
       unsigned n_atoms=0;               // number of atoms supplied to the CV
+      unsigned n_dxclude=0;               // number of atoms that will experience the GHOSTPROBE force
       vector<double> atoms_x;
       vector<double> atoms_y;
       vector<double> atoms_z;
@@ -120,6 +122,7 @@ namespace PLMD
       vector<double> d_Psi_dx;
       vector<double> d_Psi_dy;
       vector<double> d_Psi_dz;
+      vector<unsigned> dxclude_idx; // 1 if derivative needs to be calculated, 0 otherwise
 
       // Correction of derivatives
       vector<double> tx;
@@ -171,6 +174,7 @@ namespace PLMD
       keys.addFlag("DUMPDERIVATIVES", false, "print derivatives and corrections");
       keys.addFlag("RESTART_PROBES", false, "Restart probe positions from stored coordinates");
       keys.add("atoms", "ATOMS", "Atoms to include in druggability calculations (start at 1)");
+      keys.add("atoms", "DXCLUDE", "Atoms that will experience the GHOSTPROBE force");
       keys.add("atoms", "ATOMS_INIT", "Atoms in which the probes will be initially centered.");
       keys.add("optional", "NPROBES", "Number of probes to use");
       keys.add("optional", "PROBESTRIDE", "Print probe coordinates info every PROBESTRIDE steps");
@@ -252,6 +256,22 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
 
       parseAtomList("ATOMS", atoms);
       n_atoms = atoms.size();
+
+      parseAtomList("DXCLUDE", dxclude);
+      n_dxclude = dxclude.size();
+      cout << "Excluding " << n_dxclude << " atoms from derivative calculations" << endl;
+      for (unsigned j=0;j<n_atoms;j++)
+      {
+        int dxclude_j=aidefunctions::findIndex(dxclude,atoms[j]);
+        if (dxclude_j==-1)
+        {
+          dxclude_idx.push_back(0);
+        }
+        else
+        {
+          dxclude_idx.push_back(1);
+        }
+      }
 
       parseAtomList("ATOMS_INIT", atoms_init);
       n_init = atoms_init.size();
@@ -725,6 +745,16 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       }
       if (performance and step%probestride==0)  end_psi = high_resolution_clock::now();
       
+      // Set excluded derivatives to 0 (although we still need them to move the probe (?))
+      for (unsigned j=0;j<n_atoms;j++)
+      {
+        if (dxclude_idx[j]==1)
+        {
+          d_Psi_dx[j]=0;
+          d_Psi_dy[j]=0;
+          d_Psi_dz[j]=0;
+        }
+      }
       //Correct the Psi derivatives so that they sum 0
       if (!nodxfix)
       {
