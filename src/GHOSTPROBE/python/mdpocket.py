@@ -57,7 +57,8 @@ def select_pocket(mdpocket_out,ligand_obj,cutoff):
                 break
     new_pocket_obj=pocket_obj.atom_slice(pocket_sel)
     new_pocket_obj.save_pdb("pocket.pdb")
-    return
+    n_atoms=new_pocket_obj.n_atoms
+    return n_atoms
 
 if __name__ == "__main__":
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     ligand_obj=get_ligand_obj(ref_obj,args.lig_selection)
 
     # Load trajectory and reference structure, align trajectory to reference structure
-    trj_obj=mdtraj.load(args.trajectory,top=args.topology)[0:10]
+    trj_obj=mdtraj.load(args.trajectory,top=args.topology)
     selection=get_selection(ref_obj,trj_obj,args.ref_selection)
     print(selection)
     trj_obj=align_trj(trj_obj,ref_obj,selection)
@@ -80,15 +81,17 @@ if __name__ == "__main__":
         f.write("tmp.pdb\n")
 
     volume=pymp.shared.array((len(trj_obj),), dtype='float64')
+    alphaspheres=pymp.shared.array((len(trj_obj),), dtype='int32')
     root_dir=os.getcwd()
     with pymp.Parallel() as p:
         for i in p.range(0, len(trj_obj)):
             print(f"processing frame {i}")
-            os.mkdir(f"frame_{i}")
+            os.makedirs(f"frame_{i}",exist_ok=True)
             os.chdir(f"frame_{i}")
             trj_obj[i].save_pdb("tmp.pdb")
             subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file"])
-            select_pocket("mdpout_freq_iso_0_5.pdb", ligand_obj, args.cutoff)
+            n_alpha=select_pocket("mdpout_freq_iso_0_5.pdb", ligand_obj, args.cutoff)
+            alphaspheres[i]=n_alpha
             subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file", "--selected_pocket", "pocket.pdb"])
             with open("mdpout_descriptors.txt") as f:
                 for line in f:
@@ -97,9 +100,10 @@ if __name__ == "__main__":
                     else:
                         volume[i]=float(line.split()[1])
             os.chdir(root_dir)
-            #subprocess.run(["rm", "-r", f"frame_{i}"])
+            if n_alpha > 0:
+               subprocess.run(["rm", "-r", f"frame_{i}"])
     subprocess.run(["rm", "pdb_list_file"])
 
     snapshot_id=np.arange(0,len(trj_obj))
-    volumes=pd.DataFrame({"snapshot":snapshot_id,"volume":volume})
+    volumes=pd.DataFrame({"snapshot":snapshot_id,"volume":volume,"n_alpha":alphaspheres})
     volumes.to_csv("volumes.csv",sep=" ",index=False)
