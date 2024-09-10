@@ -1,75 +1,105 @@
 import argparse
-import mdtraj
-import os
-import sys
 import subprocess
+import mdtraj
 import numpy as np
+import os
 import pymp
 import pandas as pd
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
-    parser.add_argument('-f','--fpocket_input', nargs="?", help="holo input file for fpocket",default="holo.pdb")
-    parser.add_argument('-hs','--holo_selection', nargs="?", help="selection to clean up holo structure",default="not water and not resname NA and not resname CL")
-    parser.add_argument('-s','--ligand_sel', nargs="?", help="VMD-style selection for the ligand",default="resname LIG")
-    parser.add_argument('-p','--topology', nargs="?", help="topology file to load trajectory with mdtraj",default="prod.gro")
-    parser.add_argument('-t','--trajectory', nargs="?", help="Pre-aligned trajectory to analyse with mdpocket",default="prod.xtc")
-    parser.add_argument('-r','--rmax', type=float, nargs="?", help="Distance from the ligand to considewr an alpha sphere part of the pocket of interest (nm)",default=0.3)
+    parser.add_argument('-r','--ref_structure', nargs="?", help="Reference holo structure",default="holo.pdb")
+    parser.add_argument('-rs','--ref_selection', nargs="?", help="Selection for alignement of the trajectory to the reference structure",default="backbone")
+    parser.add_argument('-ls','--lig_selection', nargs="?", help="Selection for the ligand in the reference structure",default="resname LIG")
+    parser.add_argument('-f','--topology', nargs="?", help="Topology for mdtraj (pdb/gro)",default="prod.gro")
+    parser.add_argument('-x','--trajectory', nargs="?", help="Trajectory for mdtraj (xtc/trr)",default="prod.xtc")
+    parser.add_argument('-c','--cutoff', nargs="?",type=float, help="Pocket-ligand cutoff",default=0.3)
     args = parser.parse_args()
     return args
 
-def get_pocket(holo_like,ligand,rmax):
-    holo_like.save("holo_like.pdb")
-    # Run fpocket
-    subprocess.run(["fpocket","-f","holo_like.pdb"])
-    # Load the pocket file
-    load_name="holo_like_out/holo_like_out.pdb"
-    fpocket_out=mdtraj.load(load_name)
-    pocket_sel=fpocket_out.top.select("resname STP")
-    pockets=fpocket_out.atom_slice(pocket_sel)
-    pockets_xyz=pockets.xyz[0]
-    #Generate an mdtraj object containing the atoms from pockets that are within rmax of ligand
-    pocketname=f"pocket_{str(rmax)}.pdb"
-    pocket_atoms=[]
-    for i in range(len(pockets_xyz)):
-        for j in range(len(ligand.xyz[0])):
-            if np.linalg.norm(pockets_xyz[i]-ligand.xyz[0][j])<=rmax:
-                pocket_atoms.append(i)
+def get_ligand_obj(ref_obj,lig_selection,hydrogens=False):
+    ligand_sel_raw=ref_obj.topology.select(lig_selection)
+    if not hydrogens:
+        ligand_sel=[i for i in ligand_sel_raw if ref_obj.topology.atom(i).element.symbol!="H"]
+    else:
+        ligand_sel=ligand_sel_raw
+    ligand_obj=ref_obj.atom_slice(ligand_sel)
+    return ligand_obj
+
+def get_selection(ref_obj,trj_obj,sel_str):
+    selection=ref_obj.topology.select(sel_str)
+    selection_trj=trj_obj.topology.select(sel_str)
+    assert len(selection)==len(selection_trj), "Selections have different number of atoms"
+    for i in range(0,len(selection)):
+        ref_name=ref_obj.topology.atom(selection[i]).name
+        trj_name=trj_obj.topology.atom(selection_trj[i]).name
+        assert ref_name==trj_name, f"Selections have different atoms at position {selection[i]}: {ref_name} vs {trj_name}"
+    print("assert selection OK")
+    return selection
+
+def align_trj(trj_obj,ref_obj,selection):
+    anchor_molecules=[set(trj_obj.topology.residue(0).atoms)]
+    trj_obj.image_molecules(inplace=True,anchor_molecules=anchor_molecules)
+    trj_obj.superpose(reference=ref_obj,atom_indices=selection,ref_atom_indices=selection)
+    return trj_obj
+
+def select_pocket(mdpocket_out,ligand_obj,cutoff):
+    pocket_obj=mdtraj.load(mdpocket_out)
+    #select the pocket atoms that are within a cutoff distance from at least one ligand atom
+    pocket_sel=[]
+    for i in range(0,len(pocket_obj.xyz[0])):
+        xyz_i=pocket_obj.xyz[0][i]
+        for j in range(0,len(ligand_obj.xyz[0])):
+            xyz_j=ligand_obj.xyz[0][j]
+            dist=np.linalg.norm(xyz_i-xyz_j)
+            if dist<cutoff:
+                pocket_sel.append(i)
                 break
-    pocket_atoms=np.array(pocket_atoms)
-    pocket=pockets.atom_slice(pocket_atoms)
-    pocket.save(pocketname)
-    return pocketname
-
-def run_mdpocket(top_str,trj_str,pocket_str):
-    top_obj=mdtraj.load(top_str)
-    top_obj.save("top.pdb")
-    mdpocket_cmd=["mdpocket",
-                  "--trajectory_file",trj_str,
-                  "--trajectory_format","xtc",
-                  "-f","top.pdb",
-                  "--selected_pocket",pocket_str]
-    subprocess.run(mdpocket_cmd)
-    
-    sed_cmd = ["sed", "-i", "s/  */ /g", "mdpout_descriptors.txt"]
-    subprocess.run(sed_cmd)
-
+    new_pocket_obj=pocket_obj.atom_slice(pocket_sel)
+    new_pocket_obj.save_pdb("pocket.pdb")
     return
 
-if __name__=="__main__":
-    
-    args=parse()
-    
-    # Load fpocket input and separate ligand
-    holo_sel=args.holo_selection
-    holo=mdtraj.load(args.fpocket_input)
-    holo=holo.atom_slice(holo.top.select(holo_sel))
-    holo.save("holo.pdb")
-    holo_like=holo.atom_slice(holo.top.select(f"not ({args.ligand_sel})"))
-    ligand=holo.atom_slice(holo.top.select(args.ligand_sel))
-    # Get the pocket
-    pocket=get_pocket(holo_like,ligand,args.rmax)
-    # Run mdpocket on the trajectory with pocket as the pocket of reference
-    run_mdpocket(args.topology,args.trajectory,pocket)
+if __name__ == "__main__":
 
+    args = parse()
+
+    # Get ligand object from reference structure
+    ref_obj=mdtraj.load(args.ref_structure)
+    ligand_obj=get_ligand_obj(ref_obj,args.lig_selection)
+
+    # Load trajectory and reference structure, align trajectory to reference structure
+    trj_obj=mdtraj.load(args.trajectory,top=args.topology)[0:10]
+    selection=get_selection(ref_obj,trj_obj,args.ref_selection)
+    print(selection)
+    trj_obj=align_trj(trj_obj,ref_obj,selection)
+
+    
+    pock_vol=[]
+
+    with open("pdb_list_file","w") as f:
+        f.write("tmp.pdb\n")
+
+    volume=pymp.shared.array((len(trj_obj),), dtype='float64')
+    root_dir=os.getcwd()
+    with pymp.Parallel() as p:
+        for i in p.range(0, len(trj_obj)):
+            print(f"processing frame {i}")
+            os.mkdir(f"frame_{i}")
+            os.chdir(f"frame_{i}")
+            trj_obj[i].save_pdb("tmp.pdb")
+            subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file"])
+            select_pocket("mdpout_freq_iso_0_5.pdb", ligand_obj, args.cutoff)
+            subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file", "--selected_pocket", "pocket.pdb"])
+            with open("mdpout_descriptors.txt") as f:
+                for line in f:
+                    if line.startswith("snapshot"):
+                        continue
+                    else:
+                        volume[i]=float(line.split()[1])
+            os.chdir(root_dir)
+            #subprocess.run(["rm", "-r", f"frame_{i}"])
+    subprocess.run(["rm", "pdb_list_file"])
+
+    snapshot_id=np.arange(0,len(trj_obj))
+    volumes=pd.DataFrame({"snapshot":snapshot_id,"volume":volume})
+    volumes.to_csv("volumes.csv",sep=" ",index=False)
