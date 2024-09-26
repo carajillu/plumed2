@@ -92,6 +92,10 @@ if __name__ == "__main__":
             subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file"])
             n_alpha=select_pocket("mdpout_freq_iso_0_5.pdb", ligand_obj, args.cutoff)
             alphaspheres[i]=n_alpha
+            if n_alpha == 0:
+                volume[i]=0
+                os.chdir(root_dir)
+                continue
             subprocess.run(["mdpocket", "--pdb_list", "../pdb_list_file", "--selected_pocket", "pocket.pdb"])
             with open("mdpout_descriptors.txt") as f:
                 for line in f:
