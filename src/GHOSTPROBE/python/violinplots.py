@@ -30,7 +30,7 @@ def plt_violin(data,colors):
        print(name)
        custom_palette.append(colors.get(name,"grey"))
    print(custom_palette)
-   sns.violinplot(x='name', y='pock_volume', data=data, split=True,palette=custom_palette,inner="quart")
+   sns.violinplot(x='name', y='pock_volume', data=data, split=False,palette=custom_palette,inner="quart")
    plt.xlabel('Simulation')
    plt.ylim([0,max(data.pock_volume)+10])
    plt.savefig("violinplot.png")
