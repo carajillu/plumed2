@@ -6,19 +6,21 @@ import subprocess
 import numpy as np
 import pymp
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action=argparse.BooleanOptionalAction)
     parser.add_argument('--cleanup', action=argparse.BooleanOptionalAction,help="Remove fpocket output files after processing")
     parser.add_argument('-f','--topology', nargs="?", help="Topology file for mdtraj",default="protein.pdb")
-    parser.add_argument('-e','--trj_eq_path', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium.xtc")
-    parser.add_argument('-es','--equilibrium_scores', nargs=1, help="Equilibrium MD trajectory file for mdtraj",default="equilibrium_scores.pdb")
+    parser.add_argument('-r','--trj_ref_path', nargs="?", help="reference MD trajectory file for mdtraj",default="reference.xtc")
+    parser.add_argument('-rs','--reference_scores', nargs=1, help="reference MD trajectory file for mdtraj",default="reference_scores.pdb")
     parser.add_argument('-b','--trj_bias_path', nargs="+", help="Biased MD trajectory file(s) for mdtraj",default=["biased.xtc"])
     parser.add_argument('-o','--output', nargs="?", help="Output PDB file with the cryproscore of each atom as B-factor",default="crypto.pdb")
-    parser.add_argument('--r_min', type=float, help="Minimum distance for S_off function",default=0.3076)
-    parser.add_argument('--delta_r', type=float, help="Distance over which S_off turns off",default=0.0564)
-    parser.add_argument('--drug_min', type=float, help="Minimim druggability score to include a pocket in the analysis",default=0.1)
+    parser.add_argument('--r_min', type=float, help="Minimum distance for S_off function",default=0.4430)
+    parser.add_argument('--delta_r', type=float, help="Distance over which S_off turns off",default=0.3)
+    parser.add_argument('--drug_min', type=float, help="Minimim druggability score to include a pocket in the analysis",default=0)
+    parser.add_argument("--nframes",type=int,help="number of frames to use for each trajectory (default=0 means all)",default=0)
     args = parser.parse_args()
     return args
 
@@ -115,10 +117,10 @@ def calc_pocketscores(pdb_list,ref_structure,r_min,delta_r):
             pocketscores[i]+=pocketscores_pdb[i]/(n_frames*100) # to keep within b-factor range
     return pocketscores
                     
-def calc_cryptoscores(pocketscores_eq,pocketscores_bias):
+def calc_cryptoscores(pocketscores_ref,pocketscores_bias):
     cryptoscores=[]
-    for i in range(0,len(pocketscores_eq)):
-        cryptoscores.append(pocketscores_bias[i]-pocketscores_eq[i])
+    for i in range(0,len(pocketscores_ref)):
+        cryptoscores.append(pocketscores_bias[i]-pocketscores_ref[i])
     return cryptoscores
 
 def output_score_pdb(trj_obj,scores,out_pdb):
@@ -141,48 +143,71 @@ def pocketscores_byres(z):
     resnames=z["residue"].unique()
     res_scores=pd.DataFrame()
     res_scores["residue"]=resnames
-    res_scores["equilibrium"]=0
+    res_scores["reference"]=0
     for bias in z.columns[2:]:
         res_scores[bias]=0
     for res in resnames:
-        res_scores.loc[res_scores["residue"]==res,"equilibrium"]=sum(z.loc[z["residue"]==res,"equilibrium"])
+        res_scores.loc[res_scores["residue"]==res,"reference"]=sum(z.loc[z["residue"]==res,"reference"])
         for bias in z.columns[2:]:
             res_scores.loc[res_scores["residue"]==res,bias]=sum(z.loc[z["residue"]==res,bias])
     return res_scores
+
+def plot_crypto(z):
+    z["id"]=range(len(z.residue))
+    for run in z.keys():
+        if run in ["residue","id","reference"]:
+            continue
+        name=f"{run}.crypto"
+        z[name]=z[run]-z.reference
+        if run==z.keys()[2]:
+            ax=z.plot.line("id",name,color="blue")
+        else:
+            z.plot.line("id",name,color="orange",ax=ax)
+    plt.show()
+    plt.savefig("crypto.png")
+    z.to_csv("crypto.csv")
+    return z
+
 
 
 if __name__=="__main__":
     root_dir=os.getcwd()
     args=parse()
+    print(args)
     ref_obj=mdtraj.load(args.topology)
 
     z=pd.DataFrame()
     z["atom"]=mdtraj_get_atoms(ref_obj)
     z["residue"]=mdtraj_get_residues(ref_obj)
 
-    if os.path.isfile(args.equilibrium_scores):
-        pocketscores_eq=get_scores(args.equilibrium_scores)
+    if os.path.isfile(args.reference_scores):
+        pocketscores_ref=get_scores(args.reference_scores)
     else:
         if args.debug:
-           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)[0:1]
+           ref_trj=mdtraj.load(args.trj_ref_path,top=args.topology)[0:1]
+        elif args.nframes>0:
+            ref_trj=mdtraj.load(args.trj_ref_path,top=args.topology)[0:args.nframes]
         else:
-           eq_trj=mdtraj.load(args.trj_eq_path,top=args.topology)
-        os.makedirs("equilibrium",exist_ok=True)
-        os.chdir("equilibrium")
+           ref_trj=mdtraj.load(args.trj_ref_path,top=args.topology)
+        dirname=args.trj_ref_path.split(".")[0]
+        os.makedirs(dirname,exist_ok=True)
+        os.chdir(dirname)
         os.makedirs("fpocket",exist_ok=True)
         os.chdir("fpocket")
-        fpocketlist_eq=run_fpocket(eq_trj,args.drug_min)
-        pocketscores_eq=calc_pocketscores(fpocketlist_eq,ref_obj,args.r_min,args.delta_r)
-        z["equilibrium"]=pocketscores_eq
+        fpocketlist_ref=run_fpocket(ref_trj,args.drug_min)
+        pocketscores_ref=calc_pocketscores(fpocketlist_ref,ref_obj,args.r_min,args.delta_r)
+        z["reference"]=pocketscores_ref
         os.chdir("..")
-        outname=args.equilibrium_scores
-        output_score_pdb(ref_obj[0],pocketscores_eq,args.equilibrium_scores)
+        outname=args.reference_scores
+        output_score_pdb(ref_obj[0],pocketscores_ref,args.reference_scores)
         os.chdir(root_dir)
     
     for bias_path in args.trj_bias_path:
         print(bias_path)
         if args.debug:
            bias_obj=mdtraj.load(bias_path,top=args.topology)[0:1]
+        elif args.nframes>0:
+            bias_obj=mdtraj.load(bias_path,top=args.topology)[0:args.nframes]
         else:
            bias_obj=mdtraj.load(bias_path,top=args.topology)
         dirname=bias_path.split(".")[0]
@@ -196,7 +221,7 @@ if __name__=="__main__":
         os.chdir("..")
         outname=dirname+"_pocketscores.pdb"
         output_score_pdb(bias_obj[0],pocketscores_bias,outname)
-        cryptoscores=calc_cryptoscores(pocketscores_eq,pocketscores_bias)
+        cryptoscores=calc_cryptoscores(pocketscores_ref,pocketscores_bias)
         outname=dirname+"_crypto.pdb"
         output_score_pdb(bias_obj[0],cryptoscores,outname)
         os.chdir(root_dir)
@@ -204,6 +229,7 @@ if __name__=="__main__":
     z.to_csv("atom_scores.csv",index=False)
     z=pocketscores_byres(z)
     z.to_csv("resid_scores.csv",index=False)
+    z=plot_crypto(z)
     
     
     
