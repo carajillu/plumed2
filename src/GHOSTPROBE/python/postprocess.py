@@ -107,7 +107,12 @@ def mktraj(xyz,id):
 
 def stack_traj(protein_traj,probes_trj):
     for probe in probes_trj:
-        protein_traj=protein_traj.stack(probe)
+        if protein_traj.n_frames == probe.n_frames:
+           protein_traj=protein_traj.stack(probe)
+        elif protein_traj.n_frames > probe.n_frames:
+           protein_traj=protein_traj[0:probe.n_frames].stack(probe)
+        elif protein_traj.n_frames < probe.n_frames:
+           protein_traj=protein_traj.stack(probe[0:protein_traj.n_frames])
     return protein_traj
 
 def get_activity(nprobes,stride,frame_begin,frame_end):
@@ -189,8 +194,9 @@ if __name__=="__main__":
     newtraj=newtraj.superpose(reference=ref_obj,atom_indices=selection,ref_atom_indices=selection)
     #export
     try:
-       newtraj[0].save_gro(args.output+".gro")
-       newtraj.save_xtc(args.output+".xtc")
+       prb_traj=newtraj.atom_slice(newtraj.topology.select("resname PRB"))
+       prb_traj[0].save_gro("probes.gro")
+       prb_traj.save_xtc("probes.xtc")
     except:
         print(args.output, "could not be saved")
     try:
