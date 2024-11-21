@@ -109,5 +109,5 @@ if __name__ == "__main__":
     subprocess.run(["rm", "pdb_list_file"])
 
     snapshot_id=np.arange(0,len(trj_obj))
-    volumes=pd.DataFrame({"snapshot":snapshot_id,"volume":volume,"n_alpha":alphaspheres})
+    volumes=pd.DataFrame({"snapshot":snapshot_id,"pock_volume":volume,"n_alpha":alphaspheres})
     volumes.to_csv("volumes.csv",sep=" ",index=False)
