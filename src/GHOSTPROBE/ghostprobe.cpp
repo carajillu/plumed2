@@ -84,6 +84,8 @@ namespace PLMD
       double kpert=0;
       double kxplor=0;
       unsigned pertstride=0;
+      string ref_lig;
+      PDB lig_pdb;
       bool restart_probes;
       int restart_frame=0;
       // Parameters
@@ -189,6 +191,7 @@ namespace PLMD
       keys.add("optional", "KPERT", "");
       keys.add("optional", "KXPLOR", "");
       keys.add("optional", "PERTSTRIDE", "Do a full KPERT random perturbation every PERTSTRIDE steps");
+      keys.add("optional","REF_LIG","Coordinates od reference ligand atoms to place the probes on.");
       keys.add("optional", "RESTART_FRAME", "");
     }
 
@@ -273,9 +276,6 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         }
       }
 
-      parseAtomList("ATOMS_INIT", atoms_init);
-      n_init = atoms_init.size();
-
       parse("NPROBES", nprobes);
       if (!nprobes)
       {
@@ -286,8 +286,24 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       The following bit checks if ATOMS_INIT has been specified.
       If so, all probes will be initialised in the centre of ATOMS_INIT.
       Otherwise, each probe will be initialised on a protein atom chosen at random.
-      */      
-      if (n_init==0 and !restart_probes)
+      */
+      parseAtomList("ATOMS_INIT", atoms_init);
+      n_init = atoms_init.size();
+
+      parse("REF_LIG",ref_lig);
+      
+      if (!ref_lig.empty())
+      {
+        if( !lig_pdb.read(ref_lig,usingNaturalUnits(),0.1/getUnits().getLength()) )
+         {
+          cout << "missing input file " << ref_lig << endl;
+          exit(1);
+         }
+        unsigned lig_natoms=lig_pdb.getAtomNumbers().size();
+        cout << ref_lig << " has " << lig_natoms << " atoms. Changing NPROBES from " << nprobes << " to " << lig_natoms << endl;
+        nprobes=lig_natoms;
+      }
+      else if (n_init==0 and !restart_probes)
       {
         cout << "geting random atoms_init" << endl;
         for (unsigned i=0; i<nprobes; i++)
@@ -385,7 +401,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       cout << "Perturbations of " << kxplor << " nm will be applied to probes with C equal to 0." << endl;
       cout << "Those perturbations will go in a random direction." << endl;
       }
-      
+
       for (unsigned i = 0; i < nprobes; i++)
       {
         probes.push_back(Probe(i, restart_probes,
@@ -629,7 +645,7 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
       double y=0;
       double z=0;
 
-      if (restart_probes)
+      if (restart_probes) //restart probes from input coordinates
       {
        vector<vector<double>> protein_xyz=aidefunctions::read_xyz("protein.xyz",restart_frame);
        for (unsigned i=0; i<nprobes; i++)
@@ -645,24 +661,19 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
         probes[i].place_probe(x,y,z);
         probes[i].get_atoms_restart(protein_xyz);
        }
-       return;
       }
-
-      if (atoms_init.size() == 0)
+      else if (!ref_lig.empty()) // place probes on the coordinates of an input ligand
       {
-        for (unsigned i = 0; i < nprobes; i++)
+        for (unsigned i=0; i<nprobes; i++)
         {
-          x=getPosition(init_j[i])[0];
-          y=getPosition(init_j[i])[1];
-          z=getPosition(init_j[i])[2];
+          x=lig_pdb.getPositions()[i][0];
+          y=lig_pdb.getPositions()[i][1];
+          z=lig_pdb.getPositions()[i][2];
           probes[i].place_probe(x,y,z);
-          probes[i].perturb_probe(0);
-          cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
-        }
+        }  
       }
-      else
+      else if (atoms_init.size()!=0) // Place ALL probes in the geometric centre of a set of atoms
       {
-       //cout << n_atoms << endl;
        for (unsigned j=0; j<init_j.size();j++)
        {
         //cout << j << " " << init_j[j] << " " << getPosition(init_j[j])[0]<< " " << getPosition(init_j[j])[1]<< " " << getPosition(init_j[j])[2] <<  endl;
@@ -674,10 +685,22 @@ This does not seem to be affected by the environment variable $PLUMED_NUM_THREAD
        {
         probes[i].place_probe(x,y,z);
        }
-       //cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
+       cout << "All probes are initialised at point " << x << " " << y << " " << z << endl;
       }
+      else 
+      {
+        for (unsigned i = 0; i < nprobes; i++)
+        {
+          x=getPosition(init_j[i])[0];
+          y=getPosition(init_j[i])[1];
+          z=getPosition(init_j[i])[2];
+          probes[i].place_probe(x,y,z);
+          probes[i].perturb_probe(0);
+          cout << "Probe " << i << " centered on atom " << atoms[init_j[i]].serial() << endl;
+        }
+      }
+      return;
     }
-
     // calculator
     void Ghostprobe::calculate()
     {
