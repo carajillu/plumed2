@@ -2,26 +2,36 @@ import argparse
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
 
-colors={"holo":"blue","apo":"red"}
+colors={"holo":"blue", "holo_like": "purple", "apo":"red"}
 thickness={"apo":2,"holo":2}
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i','--descriptor_files', nargs="+", help="mdpout_descriptors.txt files of experiment trajectories (can be more than 1)",default=["mdpout_descriptors.txt"])
-    parser.add_argument('-r','--descriptor_holo', nargs="?", help="mdpout_descriptors.txt files of reference holo trajectory",default="holo_mdpout_descriptors.txt")
-    parser.add_argument('-a','--descriptor_apo', nargs="?", help="mdpout_descriptors.txt files of reference holo trajectory",default="apo_mdpout_descriptors.txt")
+    parser.add_argument('-i','--descriptor_files', nargs="+", help="mdpout_descriptors.txt files of experiment trajectories (can be more than 1)",default=["biased_0.csv"])
+    parser.add_argument('-r','--descriptor_holo', nargs="?", help="mdpout_descriptors.txt files of reference holo trajectory",default="holo.csv")
+    parser.add_argument('-l','--descriptor_hololike', nargs="?", help="mdpout_descriptors.txt files of reference holo trajectory",default="holo_like.csv")
+    parser.add_argument('-a','--descriptor_apo', nargs="?", help="mdpout_descriptors.txt files of reference holo trajectory",default="apo.csv")
     parser.add_argument('-m','--min_vol', nargs="?", type=float, help="Filter out snapshots below the requested volume",default=0)
     parser.add_argument('--ref_vol', nargs="?", type=float, help="Volume of the pocket in the reference frame",default=0)
     parser.add_argument('--increment', nargs="?", type=float, help="Increment for threshold percentages", default=5)
     args = parser.parse_args()
     return args
 
-def load_data(file_path,start=0):
-    data=pd.read_csv(file_path,sep=" ")[start:]
-    name=file_path.split("/")[-1].split(".")[0]
-    data["name"]=[name]*len(data)
-    data["vol_roll"]=data["pock_volume"].rolling(window=100).mean()
+def load_data(file_path=None,start=0):
+    if file_path is None:
+        data=pd.DataFrame()
+        data["snapshot"]=[]
+        data["pock_volume"]=[]
+        data["n_alpha"]=[]
+        data["name"]=[]
+        data["vol_roll"]=[]
+    else:
+        data=pd.read_csv(file_path,sep=" ")[start:]
+        name=file_path.split("/")[-1].split(".")[0]
+        data["name"]=[name]*len(data)
+        data["vol_roll"]=data["pock_volume"].rolling(window=100).mean()
     return data
 
 def plt_violin(data,colors):
@@ -87,8 +97,13 @@ def plot_threshold_vs_percentage(summary_df,colors,thickness):
 if __name__=="__main__":
    args=parse()
 
-   data=load_data(args.descriptor_holo)
-   data=pd.concat([data,load_data(args.descriptor_apo)])
+   data=load_data()
+   if os.path.isfile(args.descriptor_holo):
+      data=pd.concat([data,load_data(args.descriptor_holo)])
+   if os.path.isfile(args.descriptor_hololike):   
+      data=pd.concat([data,load_data(args.descriptor_hololike)])
+   if os.path.isfile(args.descriptor_apo):
+      data=pd.concat([data,load_data(args.descriptor_apo)])
 
 
    for i in range(len(args.descriptor_files)):
