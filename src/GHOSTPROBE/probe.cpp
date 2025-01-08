@@ -306,22 +306,23 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
  activity=C*P;
  if (dxcalc)
  {
-  d_activity_dprobe[0]=0;
-  d_activity_dprobe[1]=0;
-  d_activity_dprobe[2]=0;
   #pragma omp parallel for
   for (unsigned j=0; j<n_atoms;j++)
-  {
-   d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
-   d_activity_dy[j]=C*dP_dy[j]+P*dC_dy[j];
-   d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
-   #pragma omp critical //avoid race condition
    {
-   d_activity_dprobe[0]-=d_activity_dx[j];
-   d_activity_dprobe[1]-=d_activity_dy[j];
-   d_activity_dprobe[2]-=d_activity_dz[j];
+    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
+    d_activity_dy[j]=C*dP_dy[j]+P*dC_dy[j];
+    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
    }
-  }
+  
+  d_activity_dprobe[0]=0;
+  d_activity_dprobe[1]=0;
+  d_activity_dprobe[2]=0; 
+  for (unsigned j=0; j<n_atoms;j++)
+   {
+    d_activity_dprobe[0]-=d_activity_dx[j];
+    d_activity_dprobe[1]-=d_activity_dy[j];
+    d_activity_dprobe[2]-=d_activity_dz[j];
+   }
  }
 }
 
@@ -355,20 +356,28 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
  centroid[2]/=n_atoms;
 
  //remove centroid from atom coordinates
- for (unsigned j=0; j<n_atoms;j++)
+ if (step==0 and !restart_probes)
   {
-   if (step==0 and !restart_probes)
-   {
-   atomcoords_0.row(j).col(0)=atoms_x[j]-centroid[0];
-   atomcoords_0.row(j).col(1)=atoms_y[j]-centroid[1];
-   atomcoords_0.row(j).col(2)=atoms_z[j]-centroid[2];
+   #pragma omp parallel for
+   for (unsigned j=0; j<n_atoms;j++)
+    {
+     atomcoords_0.row(j).col(0)=atoms_x[j]-centroid[0];
+     atomcoords_0.row(j).col(1)=atoms_y[j]-centroid[1];
+     atomcoords_0.row(j).col(2)=atoms_z[j]-centroid[2];
+    }
    centroid0[0]=centroid[0];
    centroid0[1]=centroid[1];
    centroid0[2]=centroid[2];
+  }
+  else
+  {
+   #pragma omp parallel for
+   for (unsigned j=0; j<n_atoms;j++)
+   {
+    atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
+    atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
+    atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
    }
-   atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
-   atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
-   atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
   }
   //Calculate rotation matrix
   kabsch();
@@ -388,15 +397,17 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   //cout << "probe:: " << xyz[0] << " " << xyz[1] << " " << xyz[2] << endl;
   //cout << "centroid: " << centroid[0] << " " << centroid[1] << " " << centroid[2] << endl;
 
-   //backup atomcoords
-  for (unsigned i=0;i<3;i++)
+  //backup atomcoords
+  #pragma omp parallel for
+  for (unsigned j=0;j<n_atoms;j++)
   {
-   for (unsigned j=0;j<n_atoms;j++)
-   {
-     atomcoords_0.row(j).col(i)=atomcoords.row(j).col(i);
-   }
-   centroid0[i]=centroid[i];
+    atomcoords_0.row(j).col(0)=atomcoords.row(j).col(0);
+    atomcoords_0.row(j).col(1)=atomcoords.row(j).col(1);
+    atomcoords_0.row(j).col(2)=atomcoords.row(j).col(2);
   }
+  centroid0[0]=centroid[0];
+  centroid0[1]=centroid[1];
+  centroid0[2]=centroid[2];
 }
 
 void Probe::get_atoms_restart(vector<vector<double>> restart_xyz)
@@ -411,6 +422,7 @@ void Probe::get_atoms_restart(vector<vector<double>> restart_xyz)
   centroid0[2]+=restart_xyz[j][2]/n_atoms;
  }
 
+ //#pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
  {
   atomcoords_0.row(j).col(0)=restart_xyz[j][0]-centroid0[0];
