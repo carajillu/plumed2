@@ -288,6 +288,7 @@ void Probe::calculate_C()
  C=COREFUNCTIONS::Soff_m(m_clash,1);
  if (dxcalc)
  {
+  #pragma omp parallel for
   for (unsigned j=0; j<n_atoms; j++)
    {
     dC_dx[j]=COREFUNCTIONS::dSoff_dm(m_clash,1)*dm_clash*d_clash_dx[j];
