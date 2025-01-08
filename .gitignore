@@ -30,3 +30,4 @@ src/GHOSTPROBE/python/paramscan.py
 src/GHOSTPROBE/python/Rscan.py
 src/GHOSTPROBE/python/__pycache__/clustering.cpython-37.pyc
 __pycache__
+src/GHOSTPROBE/python/contact_map_generator.py
