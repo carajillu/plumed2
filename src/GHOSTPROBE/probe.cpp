@@ -172,7 +172,8 @@ void Probe::perturb_probe(unsigned step)
 void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z)
 {
  min_r=INFINITY;
- j_min_r=INFINITY; 
+ j_min_r=INFINITY;
+ #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
  {
    rx[j]=atoms_x[j]-xyz[0];
