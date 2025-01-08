@@ -254,7 +254,8 @@ void Probe::calculate_P()
 
 void Probe::calculate_clash()
 {
- total_clash=0; 
+ total_clash=0;
+ #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
  {
   if (r[j] >= Rmin+deltaRmin)
