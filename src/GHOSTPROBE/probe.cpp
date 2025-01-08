@@ -208,6 +208,7 @@ void Probe::calculate_r(vector<double> atoms_x, vector<double> atoms_y, vector<d
 void Probe::calculate_enclosure()
 {
  total_enclosure=0;
+ #pragma omp parallel for
  for (unsigned j=0; j<n_atoms; j++)
  {
   if (r[j] >= (Rmax+deltaRmax))
