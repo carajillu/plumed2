@@ -309,14 +309,18 @@ void Probe::calculate_activity(vector<double> atoms_x, vector<double> atoms_y, v
   d_activity_dprobe[0]=0;
   d_activity_dprobe[1]=0;
   d_activity_dprobe[2]=0;
+  #pragma omp parallel for
   for (unsigned j=0; j<n_atoms;j++)
   {
    d_activity_dx[j]=C*dP_dx[j]+P*dC_dx[j];
    d_activity_dy[j]=C*dP_dy[j]+P*dC_dy[j];
    d_activity_dz[j]=C*dP_dz[j]+P*dC_dz[j];
+   #pragma omp critical //avoid race condition
+   {
    d_activity_dprobe[0]-=d_activity_dx[j];
    d_activity_dprobe[1]-=d_activity_dy[j];
    d_activity_dprobe[2]-=d_activity_dz[j];
+   }
   }
  }
 }
