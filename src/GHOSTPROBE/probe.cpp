@@ -242,6 +242,7 @@ void Probe::calculate_P()
  P=COREFUNCTIONS::Son_m(m_enclosure,1);
  if (dxcalc)
  {
+  #pragma omp parallel for
   for (unsigned j=0; j<n_atoms; j++)
   {
    dP_dx[j]=dSon_dm(m_enclosure,1)*dm_enclosure*d_enclosure_dx[j];
