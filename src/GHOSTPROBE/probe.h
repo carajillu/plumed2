@@ -27,8 +27,6 @@ class Probe
   
   //stuff
   unsigned n_atoms;
-  unsigned probe_id;
-  bool restart_probes;
   bool dxcalc; // avoid derivative calculation when perturbing probe
 
   vector<double> rx;
@@ -95,29 +93,24 @@ class Probe
   void bring_to_centroid();
 
  public:
-    Probe(unsigned Probe_id, bool restart_probes,
+    Probe();
+    void Probe_init(string Probe_id,
           double RMin, double DeltaRmin, 
           double RMax, double DeltaRmax, 
           double phimin, double deltaphi, 
           double psimin, double deltapsi, 
           double kpert, double kxplor, unsigned Pertstride,
           unsigned N_atoms);
-    
-    void place_probe(double x, double y, double z);
-    void get_atoms_restart(vector<vector<double>> restart_xyz);
-    void perturb_probe(unsigned step);
-
-    
-    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
-
+    string probe_id;
     double activity;
     vector<double> d_activity_dx;
     vector<double> d_activity_dy;
     vector<double> d_activity_dz;
     vector<double> d_activity_dprobe;
-
+    void place_probe(double x, double y, double z);
+    void move_probe(unsigned step, vector<double> atoms_x,vector<double> atoms_y, vector<double> atoms_z);
     void calculate_activity(vector<double> atoms_x, vector<double> atoms_y, vector<double> atoms_z);
-
+    void perturb_probe(unsigned step);
     void print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms);
     void print_probe_xyz(int step);
 };

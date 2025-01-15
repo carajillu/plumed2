@@ -15,8 +15,9 @@
 using namespace std;
 using namespace COREFUNCTIONS;
 
+Probe::Probe(){}
 
-Probe::Probe(unsigned Probe_id, bool Restart_probes,
+void Probe::Probe_init(string Probe_id,
             double RMin, double DeltaRmin, 
             double RMax, double DeltaRmax, 
             double phimin, double deltaphi, 
@@ -25,7 +26,6 @@ Probe::Probe(unsigned Probe_id, bool Restart_probes,
             unsigned N_atoms)
 {
   probe_id=Probe_id;
-  restart_probes=Restart_probes;
   dxcalc=true;
   n_atoms=N_atoms;
   Rmin=RMin; // mind below which an atom is considered to be clashing with the probe 
@@ -355,8 +355,8 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
  centroid[1]/=n_atoms;
  centroid[2]/=n_atoms;
 
- //remove centroid from atom coordinates
- if (step==0 and !restart_probes)
+ // At the first step, do kabsch with the same exact coordinates (should print R=Id)
+ if (step==0)
   {
    #pragma omp parallel for
    for (unsigned j=0; j<n_atoms;j++)
@@ -369,16 +369,16 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
    centroid0[1]=centroid[1];
    centroid0[2]=centroid[2];
   }
-  else
+
+  // Remove centroid from coordinates
+  #pragma omp parallel for
+  for (unsigned j=0; j<n_atoms;j++)
   {
-   #pragma omp parallel for
-   for (unsigned j=0; j<n_atoms;j++)
-   {
-    atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
-    atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
-    atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
-   }
+   atomcoords.row(j).col(0)=atoms_x[j]-centroid[0];
+   atomcoords.row(j).col(1)=atoms_y[j]-centroid[1];
+   atomcoords.row(j).col(2)=atoms_z[j]-centroid[2];
   }
+  
   //Calculate rotation matrix
   kabsch();
 
@@ -410,31 +410,11 @@ void Probe::move_probe(unsigned step, vector<double> atoms_x, vector<double> ato
   centroid0[2]=centroid[2];
 }
 
-void Probe::get_atoms_restart(vector<vector<double>> restart_xyz)
-{
- centroid0[0]=0;
- centroid0[1]=0;
- centroid0[2]=0;
- for (unsigned j=0; j<n_atoms; j++)
- {
-  centroid0[0]+=restart_xyz[j][0]/n_atoms;
-  centroid0[1]+=restart_xyz[j][1]/n_atoms;
-  centroid0[2]+=restart_xyz[j][2]/n_atoms;
- }
 
- //#pragma omp parallel for
- for (unsigned j=0; j<n_atoms; j++)
- {
-  atomcoords_0.row(j).col(0)=restart_xyz[j][0]-centroid0[0];
-  atomcoords_0.row(j).col(1)=restart_xyz[j][1]-centroid0[1];
-  atomcoords_0.row(j).col(2)=restart_xyz[j][2]-centroid0[2];
- }
- return;
-}
 void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsigned n_atoms)
 {
   string filename = "probe-";
-  filename.append(to_string(probe_id));
+  filename.append(probe_id);
   //filename.append("-step-");
   //filename.append(to_string(step));
   filename.append("-stats.csv");
@@ -464,7 +444,7 @@ void Probe::print_probe_movement(int step, vector<PLMD::AtomNumber> atoms, unsig
 void Probe::print_probe_xyz(int step)
 {
  string filename = "probe-";
- filename.append(to_string(probe_id));
+ filename.append(probe_id);
  filename.append(".xyz");
  ofstream wfile;
  if (step==0)
@@ -472,7 +452,7 @@ void Probe::print_probe_xyz(int step)
  else
     wfile.open(filename.c_str(),std::ios_base::app);
  wfile << 1 << endl;
- wfile << "Probe  "<< to_string(probe_id) << endl;
+ wfile << "Probe  "<< probe_id << endl;
  wfile << "Ge " << std::fixed << std::setprecision(5) << xyz[0]*10 << " " << xyz[1]*10 << " " << xyz[2]*10 << endl;
  wfile.close();
 }
